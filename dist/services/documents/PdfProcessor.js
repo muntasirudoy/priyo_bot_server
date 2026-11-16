@@ -10,6 +10,8 @@ const Document_js_1 = require("../../models/Document.js");
 const DocumentChunk_js_1 = require("../../models/DocumentChunk.js");
 const ChunkingService_js_1 = require("./ChunkingService.js");
 const EmbeddingService_js_1 = require("../embedding/EmbeddingService.js");
+const GraphRagService_js_1 = require("../graph/GraphRagService.js");
+const env_js_1 = require("../../config/env.js");
 class PdfProcessor {
     /**
      * Processes an uploaded PDF asynchronously in the background.
@@ -30,6 +32,9 @@ class PdfProcessor {
             await Document_js_1.DocumentModel.findByIdAndUpdate(documentId, {
                 status: 'PROCESSING',
                 processingError: null,
+                graphStatus: 'PENDING',
+                graphError: null,
+                ingestionVersion: env_js_1.ENV.EMBEDDING_VERSION,
             });
             if (!fs_1.default.existsSync(filePath)) {
                 throw new Error(`File not found at path: ${filePath}`);
@@ -90,12 +95,19 @@ class PdfProcessor {
                 embedding: embeddings[index],
                 pageNumber: chunk.pageNumber,
                 chunkIndex: chunk.chunkIndex,
+                sectionTitle: chunk.content.split('\n')[0].slice(0, 160),
+                keywords: [...new Set(chunk.content.toLowerCase().match(/[\p{L}\p{N}]{4,}/gu) || [])].slice(0, 30),
+                embeddingModel: env_js_1.ENV.GEMINI_EMBEDDING_MODEL,
+                embeddingVersion: env_js_1.ENV.EMBEDDING_VERSION,
+                embeddingDimension: embeddings[index].length,
+                ingestionVersion: env_js_1.ENV.EMBEDDING_VERSION,
                 metadata: {
                     charLength: chunk.content.length,
                     generatedAt: new Date(),
                 },
             }));
             // Delete any pre-existing chunks for this document if re-processing
+            await GraphRagService_js_1.GraphRagService.deleteDocument(documentId);
             await DocumentChunk_js_1.DocumentChunk.deleteMany({ documentId });
             await DocumentChunk_js_1.DocumentChunk.insertMany(chunkDocs);
             // 12. Update Document status to COMPLETED
@@ -104,6 +116,14 @@ class PdfProcessor {
                 totalChunks: chunkDocs.length,
                 processingError: null,
             });
+            await Document_js_1.DocumentModel.findByIdAndUpdate(documentId, { graphStatus: 'PROCESSING' });
+            try {
+                await GraphRagService_js_1.GraphRagService.indexDocument(documentId);
+                await Document_js_1.DocumentModel.findByIdAndUpdate(documentId, { graphStatus: 'COMPLETED', graphError: null });
+            }
+            catch (graphError) {
+                await Document_js_1.DocumentModel.findByIdAndUpdate(documentId, { graphStatus: 'FAILED', graphError: graphError?.message || 'Graph indexing failed.' });
+            }
             console.log(`✅ Document ${documentId} processed successfully with ${chunkDocs.length} chunks.`);
         }
         catch (error) {

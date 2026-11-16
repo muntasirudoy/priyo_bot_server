@@ -10,6 +10,7 @@ const EmbeddingService_js_1 = require("../services/embedding/EmbeddingService.js
 const RagService_js_1 = require("../services/ai/RagService.js");
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const env_js_1 = require("../config/env.js");
+const index_js_1 = require("../constants/index.js");
 let passed = 0;
 let failed = 0;
 function assert(condition, testName) {
@@ -75,6 +76,8 @@ async function runAllTests() {
     console.log(`     Similarity (Shipping Q vs Refund Q): ${simRefund.toFixed(4)}`);
     console.log(`     Similarity (Shipping Q vs Mars Q): ${simMars.toFixed(4)}`);
     assert(simShipping > simMars, 'Rephrased question has higher similarity than off-topic question');
+    const deliveryTerms = index_js_1.MULTILINGUAL_TERM_GROUPS.find((group) => group.includes('delivery')) || [];
+    assert(deliveryTerms.includes('ডেলিভারি') && deliveryTerms.includes('kobe pabo'), 'Delivery expansion covers Bangla and Banglish aliases');
     // Test 5: Human Escalation Detection
     console.log('\n--- 5. Human Escalation Detection Tests ---');
     assert(RagService_js_1.RagService.isHumanEscalationRequested('I want to talk to a human'), 'Detects "talk to a human"');

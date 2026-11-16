@@ -17,7 +17,7 @@ async function verifyPipeline() {
     }),
   });
 
-  const loginData = await loginRes.json();
+  const loginData: any = await loginRes.json();
   if (!loginData.success || !loginData.data?.token) {
     throw new Error(`Admin login failed: ${JSON.stringify(loginData)}`);
   }
@@ -46,7 +46,7 @@ async function verifyPipeline() {
     body: multipartBody,
   });
 
-  const uploadData = await uploadRes.json();
+  const uploadData: any = await uploadRes.json();
   if (!uploadData.success || !uploadData.data?.document?.id) {
     throw new Error(`Document upload failed: ${JSON.stringify(uploadData)}`);
   }
@@ -65,7 +65,7 @@ async function verifyPipeline() {
     const statusRes = await fetch(`${API_BASE}/documents/${documentId}`, {
       headers: { Authorization: `Bearer ${token}` },
     });
-    const statusData = await statusRes.json();
+    const statusData: any = await statusRes.json();
     docStatus = statusData.data.document.status;
     totalChunks = statusData.data.document.totalChunks;
     console.log(`  ... poll attempt ${attempts}: status = ${docStatus}, chunks = ${totalChunks}`);
@@ -87,7 +87,7 @@ async function verifyPipeline() {
       message: 'How long does standard delivery take?',
     }),
   });
-  const q1Data = await q1Res.json();
+  const q1Data: any = await q1Res.json();
   console.log('  Customer Q: "How long does standard delivery take?"');
   console.log(`  AI Answer : "${q1Data.answer.slice(0, 100)}..."`);
   console.log('  Sources   :', q1Data.sources);
@@ -107,7 +107,7 @@ async function verifyPipeline() {
       message: 'What is the refund and return window?',
     }),
   });
-  const q2Data = await q2Res.json();
+  const q2Data: any = await q2Res.json();
   console.log('  Customer Q: "What is the refund and return window?"');
   console.log(`  AI Answer : "${q2Data.answer.slice(0, 100)}..."`);
   console.log('  Sources   :', q2Data.sources);
@@ -123,7 +123,7 @@ async function verifyPipeline() {
       message: 'What is the capital of Australia?',
     }),
   });
-  const q3Data = await q3Res.json();
+  const q3Data: any = await q3Res.json();
   console.log('  Customer Q: "What is the capital of Australia?"');
   console.log(`  AI Answer : "${q3Data.answer}"`);
   console.log('  ✅ Off-topic question declined without hallucination.\n');
@@ -138,7 +138,7 @@ async function verifyPipeline() {
       message: 'I want to talk to a human customer support representative',
     }),
   });
-  const q4Data = await q4Res.json();
+  const q4Data: any = await q4Res.json();
   console.log('  Customer Q: "I want to talk to a human customer support representative"');
   console.log(`  AI Answer : "${q4Data.answer}"`);
   console.log(`  needsHuman: ${q4Data.needsHuman}`);
@@ -153,7 +153,7 @@ async function verifyPipeline() {
   const convRes = await fetch(`${API_BASE}/conversations/${q1Data.conversationId}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
-  const convData = await convRes.json();
+  const convData: any = await convRes.json();
   console.log(`  Conversation Status: ${convData.data.conversation.status}`);
   console.log(`  Total Messages Saved: ${convData.data.messages.length}`);
   
@@ -171,7 +171,7 @@ async function verifyPipeline() {
   const dashRes = await fetch(`${API_BASE}/admin/dashboard`, {
     headers: { Authorization: `Bearer ${token}` },
   });
-  const dashData = await dashRes.json();
+  const dashData: any = await dashRes.json();
   console.log('  Dashboard Metrics:', dashData.data.metrics);
   console.log('  ✅ Admin metrics verified.\n');
 
@@ -181,7 +181,7 @@ async function verifyPipeline() {
     method: 'DELETE',
     headers: { Authorization: `Bearer ${token}` },
   });
-  const deleteData = await deleteRes.json();
+  const deleteData: any = await deleteRes.json();
   console.log(`  Deleted Chunks Count: ${deleteData.data.deletedChunksCount}`);
   console.log('  ✅ Document cascade deletion succeeded.\n');
 

@@ -10,6 +10,7 @@ router.use(requireAdminAuth as any);
 router.post('/', upload.single('file'), DocumentController.uploadDocument);
 router.get('/', DocumentController.listDocuments);
 router.get('/:id', DocumentController.getDocument);
+router.post('/:id/reindex', DocumentController.reindexDocument);
 router.delete('/:id', DocumentController.deleteDocument);
 
 export default router;

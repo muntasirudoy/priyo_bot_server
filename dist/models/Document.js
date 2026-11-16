@@ -64,6 +64,13 @@ const DocumentSchema = new mongoose_1.Schema({
         type: String,
         default: null,
     },
+    graphStatus: {
+        type: String,
+        enum: ['PENDING', 'PROCESSING', 'COMPLETED', 'FAILED'],
+        default: 'PENDING',
+    },
+    graphError: { type: String, default: null },
+    ingestionVersion: { type: String, default: 'v1' },
 }, {
     timestamps: true,
 });

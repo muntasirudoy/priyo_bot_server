@@ -4,7 +4,9 @@ exports.EmbeddingService = void 0;
 const gemini_js_1 = require("../../config/gemini.js");
 const env_js_1 = require("../../config/env.js");
 class EmbeddingService {
-    static modelName = env_js_1.ENV.GEMINI_EMBEDDING_MODEL;
+    static get modelName() {
+        return env_js_1.ENV.GEMINI_EMBEDDING_MODEL;
+    }
     /**
      * Generates a vector embedding for a single text using Gemini Embedding model.
      */
@@ -13,6 +15,9 @@ class EmbeddingService {
             throw new Error('Cannot generate embedding for empty text.');
         }
         if (!(0, gemini_js_1.isGeminiConfigured)()) {
+            if (!env_js_1.ENV.ALLOW_FALLBACK_EMBEDDINGS) {
+                throw new Error('Embedding provider is not configured; production fallback embeddings are disabled.');
+            }
             console.warn('⚠️ Gemini API key not configured. Using deterministic fallback embedding.');
             return this.generateDeterministicFallbackEmbedding(text);
         }
@@ -26,6 +31,8 @@ class EmbeddingService {
             return result.embedding.values;
         }
         catch (error) {
+            if (!env_js_1.ENV.ALLOW_FALLBACK_EMBEDDINGS)
+                throw error;
             console.warn('⚠️ Gemini embedding call failed, falling back to deterministic embedding:', error?.message || error);
             return this.generateDeterministicFallbackEmbedding(text);
         }
@@ -39,6 +46,9 @@ class EmbeddingService {
             return [];
         }
         if (!(0, gemini_js_1.isGeminiConfigured)()) {
+            if (!env_js_1.ENV.ALLOW_FALLBACK_EMBEDDINGS) {
+                throw new Error('Embedding provider is not configured; production fallback embeddings are disabled.');
+            }
             console.warn('⚠️ Gemini API key not configured. Using fallback embeddings for batch.');
             return texts.map((t) => this.generateDeterministicFallbackEmbedding(t));
         }

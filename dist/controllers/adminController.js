@@ -28,6 +28,7 @@ class AdminController {
                     recentConversations: recentConversations.map((c) => ({
                         id: c._id.toString(),
                         sessionId: c.sessionId,
+                        siteId: c.siteId,
                         status: c.status,
                         updatedAt: c.updatedAt,
                         createdAt: c.createdAt,

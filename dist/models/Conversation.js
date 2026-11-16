@@ -43,6 +43,7 @@ const ConversationSchema = new mongoose_1.Schema({
         index: true,
         trim: true,
     },
+    siteId: { type: String, trim: true, maxlength: 100, default: 'default', index: true },
     status: {
         type: String,
         enum: ['ACTIVE', 'HUMAN_REQUIRED', 'CLOSED'],

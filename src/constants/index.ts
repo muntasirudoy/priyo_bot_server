@@ -5,11 +5,24 @@ export const CHUNK_CONFIG = {
 };
 
 export const RAG_CONFIG = {
-  MAX_RETRIEVED_CHUNKS: 4,
-  DEFAULT_SIMILARITY_THRESHOLD: 0.5,
+  MAX_RETRIEVED_CHUNKS: 6,
+  DENSE_CANDIDATES: 16,
+  LEXICAL_CANDIDATES: 16,
+  DEFAULT_SIMILARITY_THRESHOLD: 0.25,
+  RRF_K: 60,
+  MAX_GRAPH_HOPS: 2,
   MAX_CONTEXT_MESSAGES: 10,
   NO_INFO_FALLBACK: "I couldn't find this information in the available support documents. Please contact our support team for further assistance.",
 };
+
+export const MULTILINGUAL_TERM_GROUPS = [
+  ['refund', 'return', 'ফেরত', 'রিফান্ড', 'ferot', 'taka ferot'],
+  ['delivery', 'shipping', 'ডেলিভারি', 'পেুঁছানো', 'pathano', 'kobe pabo'],
+  ['price', 'cost', 'fee', 'দাম', 'খরচ', 'khoroch'],
+  ['cancel', 'cancellation', 'বাতিল', 'batil'],
+  ['warranty', 'guarantee', 'ওয়ারেন্টি', 'গ্যারান্টি'],
+  ['support', 'help', 'সাহায্য', 'shahajjo'],
+];
 
 export const HUMAN_ESCALATION_PHRASES = [
   'talk to a human',

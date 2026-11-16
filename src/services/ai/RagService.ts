@@ -76,6 +76,7 @@ export class RagService {
         .map(
           (c, idx) =>
             `[Source ${idx + 1}: ${c.documentName} | Page: ${c.pageNumber}]\n${c.content}`
+            + (c.graphPath?.length ? `\nGraph relationship: ${c.graphPath.join(' -> ')}` : '')
         )
         .join('\n\n---\n\n');
 
@@ -92,6 +93,8 @@ Do not assume information that is not present.
 If the answer cannot be determined from the provided context, clearly say: "${RAG_CONFIG.NO_INFO_FALLBACK}".
 Do not fabricate prices, policies, delivery times, product information, guarantees, or company information.
 Keep answers concise, clear, and helpful.
+Reply in the customer's language (Bangla, English, or Banglish) when practical.
+If evidence is related but insufficient for an exact answer, explain the supported related information and ask one concise clarifying question.
 If the user indicates frustration or explicitly asks to speak to someone, set needsHuman to true.
 
 Output your answer strictly in the following JSON format:

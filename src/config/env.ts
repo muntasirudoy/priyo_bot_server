@@ -9,8 +9,13 @@ export const ENV = {
   MONGODB_URI: process.env.MONGODB_URI || '',
   JWT_SECRET: process.env.JWT_SECRET || 'ai-support-chatbot-secret-key-change-in-prod-12345',
   CLIENT_URL: process.env.CLIENT_URL || 'http://localhost:5173',
+  ALLOWED_EMBED_ORIGINS: (process.env.ALLOWED_EMBED_ORIGINS || '')
+    .split(',').map((origin) => origin.trim()).filter(Boolean),
   GEMINI_API_KEY: process.env.GEMINI_API_KEY || '',
   GEMINI_EMBEDDING_MODEL: process.env.GEMINI_EMBEDDING_MODEL || 'gemini-embedding-001',
   GEMINI_TEXT_MODEL: process.env.GEMINI_TEXT_MODEL || 'gemini-2.5-flash',
+  EMBEDDING_VERSION: process.env.EMBEDDING_VERSION || 'v1',
+  ALLOW_FALLBACK_EMBEDDINGS:
+    process.env.ALLOW_FALLBACK_EMBEDDINGS === 'true' || process.env.NODE_ENV !== 'production',
   UPLOAD_DIR: path.resolve(process.cwd(), process.env.UPLOAD_DIR || 'uploads'),
 };

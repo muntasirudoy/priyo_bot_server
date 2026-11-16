@@ -4,6 +4,8 @@ import { DocumentModel } from '../../models/Document.js';
 import { DocumentChunk } from '../../models/DocumentChunk.js';
 import { ChunkingService, PageText } from './ChunkingService.js';
 import { EmbeddingService } from '../embedding/EmbeddingService.js';
+import { GraphRagService } from '../graph/GraphRagService.js';
+import { ENV } from '../../config/env.js';
 
 export class PdfProcessor {
   /**
@@ -27,6 +29,9 @@ export class PdfProcessor {
       await DocumentModel.findByIdAndUpdate(documentId, {
         status: 'PROCESSING',
         processingError: null,
+        graphStatus: 'PENDING',
+        graphError: null,
+        ingestionVersion: ENV.EMBEDDING_VERSION,
       });
 
       if (!fs.existsSync(filePath)) {
@@ -100,6 +105,12 @@ export class PdfProcessor {
         embedding: embeddings[index],
         pageNumber: chunk.pageNumber,
         chunkIndex: chunk.chunkIndex,
+        sectionTitle: chunk.content.split('\n')[0].slice(0, 160),
+        keywords: [...new Set(chunk.content.toLowerCase().match(/[\p{L}\p{N}]{4,}/gu) || [])].slice(0, 30),
+        embeddingModel: ENV.GEMINI_EMBEDDING_MODEL,
+        embeddingVersion: ENV.EMBEDDING_VERSION,
+        embeddingDimension: embeddings[index].length,
+        ingestionVersion: ENV.EMBEDDING_VERSION,
         metadata: {
           charLength: chunk.content.length,
           generatedAt: new Date(),
@@ -107,6 +118,7 @@ export class PdfProcessor {
       }));
 
       // Delete any pre-existing chunks for this document if re-processing
+      await GraphRagService.deleteDocument(documentId);
       await DocumentChunk.deleteMany({ documentId });
       await DocumentChunk.insertMany(chunkDocs);
 
@@ -116,6 +128,14 @@ export class PdfProcessor {
         totalChunks: chunkDocs.length,
         processingError: null,
       });
+
+      await DocumentModel.findByIdAndUpdate(documentId, { graphStatus: 'PROCESSING' });
+      try {
+        await GraphRagService.indexDocument(documentId);
+        await DocumentModel.findByIdAndUpdate(documentId, { graphStatus: 'COMPLETED', graphError: null });
+      } catch (graphError: any) {
+        await DocumentModel.findByIdAndUpdate(documentId, { graphStatus: 'FAILED', graphError: graphError?.message || 'Graph indexing failed.' });
+      }
 
       console.log(`✅ Document ${documentId} processed successfully with ${chunkDocs.length} chunks.`);
     } catch (error: any) {

@@ -59,6 +59,12 @@ const DocumentChunkSchema = new mongoose_1.Schema({
         type: Number,
         required: true,
     },
+    sectionTitle: { type: String, default: '' },
+    keywords: { type: [String], default: [] },
+    embeddingModel: { type: String, required: true, default: 'legacy' },
+    embeddingVersion: { type: String, required: true, default: 'legacy' },
+    embeddingDimension: { type: Number, required: true, default: 0 },
+    ingestionVersion: { type: String, required: true, default: 'v1' },
     metadata: {
         type: mongoose_1.Schema.Types.Mixed,
         default: {},
@@ -67,4 +73,5 @@ const DocumentChunkSchema = new mongoose_1.Schema({
     timestamps: { createdAt: true, updatedAt: false },
 });
 DocumentChunkSchema.index({ documentId: 1, chunkIndex: 1 });
+DocumentChunkSchema.index({ content: 'text', keywords: 'text', sectionTitle: 'text' });
 exports.DocumentChunk = mongoose_1.default.model('DocumentChunk', DocumentChunkSchema);

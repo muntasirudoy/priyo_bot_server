@@ -8,6 +8,9 @@ export interface IDocument extends MongooseDoc {
   status: DocumentStatus;
   totalChunks: number;
   processingError?: string;
+  graphStatus: 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED';
+  graphError?: string;
+  ingestionVersion: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -42,6 +45,13 @@ const DocumentSchema = new Schema<IDocument>(
       type: String,
       default: null,
     },
+    graphStatus: {
+      type: String,
+      enum: ['PENDING', 'PROCESSING', 'COMPLETED', 'FAILED'],
+      default: 'PENDING',
+    },
+    graphError: { type: String, default: null },
+    ingestionVersion: { type: String, default: 'v1' },
   },
   {
     timestamps: true,

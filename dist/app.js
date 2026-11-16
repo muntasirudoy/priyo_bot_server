@@ -15,9 +15,10 @@ const chatRoutes_js_1 = __importDefault(require("./routes/chatRoutes.js"));
 const conversationRoutes_js_1 = __importDefault(require("./routes/conversationRoutes.js"));
 const adminRoutes_js_1 = __importDefault(require("./routes/adminRoutes.js"));
 exports.app = (0, express_1.default)();
+exports.app.set('trust proxy', 1);
 // Security and utility middleware
 exports.app.use((0, cors_1.default)({
-    origin: [env_js_1.ENV.CLIENT_URL, 'http://localhost:5173', 'http://127.0.0.1:5173'],
+    origin: [env_js_1.ENV.CLIENT_URL, ...env_js_1.ENV.ALLOWED_EMBED_ORIGINS, 'http://localhost:5173', 'http://127.0.0.1:5173'],
     credentials: true,
 }));
 exports.app.use(express_1.default.json({ limit: '10mb' }));

@@ -15,6 +15,9 @@ export class EmbeddingService {
     }
 
     if (!isGeminiConfigured()) {
+      if (!ENV.ALLOW_FALLBACK_EMBEDDINGS) {
+        throw new Error('Embedding provider is not configured; production fallback embeddings are disabled.');
+      }
       console.warn('⚠️ Gemini API key not configured. Using deterministic fallback embedding.');
       return this.generateDeterministicFallbackEmbedding(text);
     }
@@ -30,6 +33,7 @@ export class EmbeddingService {
 
       return result.embedding.values;
     } catch (error: any) {
+      if (!ENV.ALLOW_FALLBACK_EMBEDDINGS) throw error;
       console.warn('⚠️ Gemini embedding call failed, falling back to deterministic embedding:', error?.message || error);
       return this.generateDeterministicFallbackEmbedding(text);
     }
@@ -48,6 +52,9 @@ export class EmbeddingService {
     }
 
     if (!isGeminiConfigured()) {
+      if (!ENV.ALLOW_FALLBACK_EMBEDDINGS) {
+        throw new Error('Embedding provider is not configured; production fallback embeddings are disabled.');
+      }
       console.warn('⚠️ Gemini API key not configured. Using fallback embeddings for batch.');
       return texts.map((t) => this.generateDeterministicFallbackEmbedding(t));
     }

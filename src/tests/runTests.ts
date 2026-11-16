@@ -5,6 +5,7 @@ import { EmbeddingService } from '../services/embedding/EmbeddingService.js';
 import { RagService } from '../services/ai/RagService.js';
 import jwt from 'jsonwebtoken';
 import { ENV } from '../config/env.js';
+import { MULTILINGUAL_TERM_GROUPS } from '../constants/index.js';
 
 let passed = 0;
 let failed = 0;
@@ -80,6 +81,8 @@ async function runAllTests() {
   console.log(`     Similarity (Shipping Q vs Refund Q): ${simRefund.toFixed(4)}`);
   console.log(`     Similarity (Shipping Q vs Mars Q): ${simMars.toFixed(4)}`);
   assert(simShipping > simMars, 'Rephrased question has higher similarity than off-topic question');
+  const deliveryTerms = MULTILINGUAL_TERM_GROUPS.find((group) => group.includes('delivery')) || [];
+  assert(deliveryTerms.includes('ডেলিভারি') && deliveryTerms.includes('kobe pabo'), 'Delivery expansion covers Bangla and Banglish aliases');
 
   // Test 5: Human Escalation Detection
   console.log('\n--- 5. Human Escalation Detection Tests ---');

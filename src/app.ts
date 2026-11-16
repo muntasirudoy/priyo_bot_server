@@ -11,11 +11,12 @@ import conversationRoutes from './routes/conversationRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
 
 export const app = express();
+app.set('trust proxy', 1);
 
 // Security and utility middleware
 app.use(
   cors({
-    origin: [ENV.CLIENT_URL, 'http://localhost:5173', 'http://127.0.0.1:5173'],
+    origin: [ENV.CLIENT_URL, ...ENV.ALLOWED_EMBED_ORIGINS, 'http://localhost:5173', 'http://127.0.0.1:5173'],
     credentials: true,
   })
 );

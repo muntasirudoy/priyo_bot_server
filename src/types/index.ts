@@ -10,6 +10,14 @@ export interface SourceReference {
   similarityScore: number;
 }
 
+export interface ExpandedQuery {
+  original: string;
+  standalone: string;
+  variants: string[];
+  keywords: string[];
+  entities: string[];
+}
+
 export interface StructuredAiResponse {
   answer: string;
   confidence: 'high' | 'medium' | 'low';
@@ -38,6 +46,10 @@ export interface VectorSearchResult {
   pageNumber: number;
   chunkIndex: number;
   similarityScore: number;
+  retrievalChannels?: string[];
+  fusedScore?: number;
+  rerankerScore?: number;
+  graphPath?: string[];
 }
 
 export interface SearchOptions {

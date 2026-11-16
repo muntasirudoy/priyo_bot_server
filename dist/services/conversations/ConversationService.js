@@ -8,11 +8,12 @@ class ConversationService {
     /**
      * Find existing conversation by sessionId or create a new one.
      */
-    static async getOrCreateConversation(sessionId) {
+    static async getOrCreateConversation(sessionId, siteId = 'default') {
         let conversation = await Conversation_js_1.Conversation.findOne({ sessionId });
         if (!conversation) {
             conversation = await Conversation_js_1.Conversation.create({
                 sessionId,
+                siteId,
                 status: 'ACTIVE',
             });
         }
@@ -70,6 +71,7 @@ class ConversationService {
             return {
                 id: conv._id.toString(),
                 sessionId: conv.sessionId,
+                siteId: conv.siteId,
                 status: conv.status,
                 createdAt: conv.createdAt,
                 updatedAt: conv.updatedAt,
@@ -103,6 +105,7 @@ class ConversationService {
             conversation: {
                 id: conversation._id.toString(),
                 sessionId: conversation.sessionId,
+                siteId: conversation.siteId,
                 status: conversation.status,
                 createdAt: conversation.createdAt,
                 updatedAt: conversation.updatedAt,

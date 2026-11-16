@@ -5,13 +5,15 @@ const ConversationService_js_1 = require("../services/conversations/Conversation
 const EmbeddingService_js_1 = require("../services/embedding/EmbeddingService.js");
 const VectorSearchService_js_1 = require("../services/vector-search/VectorSearchService.js");
 const RagService_js_1 = require("../services/ai/RagService.js");
+const QueryUnderstandingService_js_1 = require("../services/ai/QueryUnderstandingService.js");
+const RetrievalReranker_js_1 = require("../services/ai/RetrievalReranker.js");
 class ChatController {
     /**
      * Main chat message handler for customer questions.
      */
     static async sendMessage(req, res, next) {
         try {
-            const { sessionId, message } = req.body;
+            const { sessionId, message, siteId = 'default' } = req.body;
             if (!sessionId || !message || typeof message !== 'string' || message.trim().length === 0) {
                 res.status(400).json({
                     success: false,
@@ -20,19 +22,27 @@ class ChatController {
                 });
                 return;
             }
+            if (typeof sessionId !== 'string' || sessionId.length > 128 || typeof siteId !== 'string' || siteId.length > 100 || message.length > 5000) {
+                res.status(400).json({ success: false, message: 'Invalid sessionId, siteId, or message length.', code: 'INVALID_INPUT' });
+                return;
+            }
             const trimmedMessage = message.trim();
             // 1. Find or create conversation
-            const conversation = await ConversationService_js_1.ConversationService.getOrCreateConversation(sessionId);
+            const conversation = await ConversationService_js_1.ConversationService.getOrCreateConversation(sessionId, siteId.trim() || 'default');
             // 2. Save USER message
             await ConversationService_js_1.ConversationService.addMessage(conversation._id, 'USER', trimmedMessage);
-            // 3. Generate question embedding
+            const priorHistory = await ConversationService_js_1.ConversationService.getMessages(conversation._id, 10);
+            const priorContext = priorHistory.filter((m) => m.role === 'USER' || m.role === 'ASSISTANT').map((m) => ({ role: m.role, content: m.content }));
+            const expandedQuery = await QueryUnderstandingService_js_1.QueryUnderstandingService.expand(trimmedMessage, priorContext.slice(0, -1));
+            // 3. Generate a semantic embedding for the standalone multilingual query
             console.log(`🔍 Generating query embedding for: "${trimmedMessage.slice(0, 50)}..."`);
-            const queryEmbedding = await EmbeddingService_js_1.EmbeddingService.generateEmbedding(trimmedMessage);
+            const queryEmbedding = await EmbeddingService_js_1.EmbeddingService.generateEmbedding(expandedQuery.standalone);
             // 4. Search relevant chunks via VectorSearchService
-            const retrievedChunks = await VectorSearchService_js_1.VectorSearchService.searchSimilarChunks(queryEmbedding);
+            const fusedChunks = await VectorSearchService_js_1.VectorSearchService.searchHybrid(queryEmbedding, expandedQuery, { topK: 12 });
+            const retrievedChunks = await RetrievalReranker_js_1.RetrievalReranker.rerank(expandedQuery.standalone, fusedChunks);
             console.log(`🎯 Found ${retrievedChunks.length} relevant chunk(s) above threshold.`);
             // 5. Get recent conversation history
-            const history = await ConversationService_js_1.ConversationService.getMessages(conversation._id, 10);
+            const history = priorHistory;
             const recentContextHistory = history
                 .filter((m) => m.role === 'USER' || m.role === 'ASSISTANT')
                 .map((m) => ({ role: m.role, content: m.content }));
@@ -92,6 +102,7 @@ class ChatController {
                     conversation: {
                         id: conversation._id.toString(),
                         sessionId: conversation.sessionId,
+                        siteId: conversation.siteId,
                         status: conversation.status,
                         createdAt: conversation.createdAt,
                     },

@@ -7,11 +7,12 @@ export class ConversationService {
   /**
    * Find existing conversation by sessionId or create a new one.
    */
-  public static async getOrCreateConversation(sessionId: string): Promise<IConversation> {
+  public static async getOrCreateConversation(sessionId: string, siteId = 'default'): Promise<IConversation> {
     let conversation = await Conversation.findOne({ sessionId });
     if (!conversation) {
       conversation = await Conversation.create({
         sessionId,
+        siteId,
         status: 'ACTIVE',
       });
     }
@@ -93,6 +94,7 @@ export class ConversationService {
         return {
           id: conv._id.toString(),
           sessionId: conv.sessionId,
+          siteId: conv.siteId,
           status: conv.status,
           createdAt: conv.createdAt,
           updatedAt: conv.updatedAt,
@@ -131,6 +133,7 @@ export class ConversationService {
       conversation: {
         id: conversation._id.toString(),
         sessionId: conversation.sessionId,
+        siteId: conversation.siteId,
         status: conversation.status,
         createdAt: conversation.createdAt,
         updatedAt: conversation.updatedAt,

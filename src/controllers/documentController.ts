@@ -6,6 +6,7 @@ import { DocumentModel } from '../models/Document.js';
 import { DocumentChunk } from '../models/DocumentChunk.js';
 import { PdfProcessor } from '../services/documents/PdfProcessor.js';
 import { ENV } from '../config/env.js';
+import { GraphRagService } from '../services/graph/GraphRagService.js';
 
 // Ensure uploads directory exists
 if (!fs.existsSync(ENV.UPLOAD_DIR)) {
@@ -40,6 +41,18 @@ export const upload = multer({
 });
 
 export class DocumentController {
+  public static async reindexDocument(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const document = await DocumentModel.findById(req.params.id);
+      if (!document) { res.status(404).json({ success: false, message: 'Document not found.', code: 'DOCUMENT_NOT_FOUND' }); return; }
+      if (document.status === 'PROCESSING') { res.status(409).json({ success: false, message: 'Document is already processing.', code: 'DOCUMENT_PROCESSING' }); return; }
+      if (!document.fileUrl || !fs.existsSync(document.fileUrl)) { res.status(409).json({ success: false, message: 'The original PDF is unavailable.', code: 'SOURCE_FILE_MISSING' }); return; }
+      await DocumentModel.findByIdAndUpdate(document._id, { status: 'PROCESSING', graphStatus: 'PENDING', processingError: null, graphError: null });
+      PdfProcessor.processDocumentAsync(document._id.toString(), document.fileUrl);
+      res.status(202).json({ success: true, message: 'Document reindexing started.', data: { document: { id: document._id.toString(), status: 'PROCESSING' } } });
+    } catch (err) { next(err); }
+  }
+
   public static async uploadDocument(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       if (!req.file) {
@@ -99,6 +112,9 @@ export class DocumentController {
             status: doc.status,
             totalChunks: doc.totalChunks,
             processingError: doc.processingError,
+            graphStatus: doc.graphStatus,
+            graphError: doc.graphError,
+            ingestionVersion: doc.ingestionVersion,
             createdAt: doc.createdAt,
             updatedAt: doc.updatedAt,
           })),
@@ -135,6 +151,9 @@ export class DocumentController {
             status: document.status,
             totalChunks: chunkCount,
             processingError: document.processingError,
+            graphStatus: document.graphStatus,
+            graphError: document.graphError,
+            ingestionVersion: document.ingestionVersion,
             createdAt: document.createdAt,
             updatedAt: document.updatedAt,
           },
@@ -161,6 +180,7 @@ export class DocumentController {
 
       // 1. Delete associated chunks from database
       const deleteResult = await DocumentChunk.deleteMany({ documentId: document._id });
+      await GraphRagService.deleteDocument(id);
       console.log(`Deleted ${deleteResult.deletedCount} chunks for document ${id}`);
 
       // 2. Delete file from filesystem if exists

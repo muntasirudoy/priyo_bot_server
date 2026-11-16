@@ -6,6 +6,12 @@ export interface IDocumentChunk extends MongooseDoc {
   embedding: number[];
   pageNumber: number;
   chunkIndex: number;
+  sectionTitle?: string;
+  keywords: string[];
+  embeddingModel: string;
+  embeddingVersion: string;
+  embeddingDimension: number;
+  ingestionVersion: string;
   metadata?: Record<string, unknown>;
   createdAt: Date;
 }
@@ -35,6 +41,12 @@ const DocumentChunkSchema = new Schema<IDocumentChunk>(
       type: Number,
       required: true,
     },
+    sectionTitle: { type: String, default: '' },
+    keywords: { type: [String], default: [] },
+    embeddingModel: { type: String, required: true, default: 'legacy' },
+    embeddingVersion: { type: String, required: true, default: 'legacy' },
+    embeddingDimension: { type: Number, required: true, default: 0 },
+    ingestionVersion: { type: String, required: true, default: 'v1' },
     metadata: {
       type: Schema.Types.Mixed,
       default: {},
@@ -46,5 +58,6 @@ const DocumentChunkSchema = new Schema<IDocumentChunk>(
 );
 
 DocumentChunkSchema.index({ documentId: 1, chunkIndex: 1 });
+DocumentChunkSchema.index({ content: 'text', keywords: 'text', sectionTitle: 'text' });
 
 export const DocumentChunk = mongoose.model<IDocumentChunk>('DocumentChunk', DocumentChunkSchema);
