@@ -42,7 +42,7 @@ export class ChatController {
 
       // 2. Save USER message
       await ConversationService.addMessage(conversation._id, 'USER', trimmedMessage);
-      if (conversation.status === 'agent_active' || conversation.status === 'human_requested') {
+      if (conversation.status === 'agent_active') {
         res.json({ success: true, answer: '', sources: [], conversationId: conversation._id.toString(), needsHuman: true, status: conversation.status }); return;
       }
       const intent = QueryUnderstandingService.classifyIntent(trimmedMessage);

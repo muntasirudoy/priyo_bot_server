@@ -12,9 +12,9 @@ class RetrievalReranker {
             const prompt = `Score each passage for its ability to answer the customer question. Semantic paraphrases and Bangla/English/Banglish equivalents count as relevant. Return JSON only: {"scores":[{"index":0,"score":0.0}]}. Do not answer.\nQuestion: ${question}\n${candidates.map((c, i) => `[${i}] ${c.content.slice(0, 1200)}`).join('\n')}`;
             const parsed = JSON.parse((await model.generateContent(prompt)).response.text());
             const scores = new Map((Array.isArray(parsed.scores) ? parsed.scores : []).map((x) => [Number(x.index), Number(x.score)]));
-            return candidates.map((c, i) => ({ ...c, rerankerScore: scores.get(i) ?? 0 }))
-                .filter((c) => (c.rerankerScore ?? 0) >= 0.15 || c.retrievalChannels?.includes('graph'))
-                .sort((a, b) => (b.rerankerScore ?? 0) - (a.rerankerScore ?? 0)).slice(0, limit);
+            const ranked = candidates.map((c, i) => ({ ...c, rerankerScore: scores.has(i) && Number.isFinite(scores.get(i)) ? Math.min(1, Math.max(0, scores.get(i))) : undefined }))
+                .sort((a, b) => Math.max(b.rerankerScore ?? 0, b.similarityScore, b.lexicalScore ?? 0) - Math.max(a.rerankerScore ?? 0, a.similarityScore, a.lexicalScore ?? 0));
+            return ranked.slice(0, limit);
         }
         catch (error) {
             console.warn('Retrieval reranking failed; retaining fused ranking.', error);

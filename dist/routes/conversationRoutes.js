@@ -8,4 +8,5 @@ router.use(authMiddleware_js_1.requireAdminAuth);
 router.get('/', conversationController_js_1.ConversationController.listConversations);
 router.get('/:id', conversationController_js_1.ConversationController.getConversation);
 router.patch('/:id/status', conversationController_js_1.ConversationController.updateStatus);
+router.post('/:id/reply', conversationController_js_1.ConversationController.sendReply);
 exports.default = router;

@@ -23,7 +23,7 @@ async function connectDatabase() {
     }
     catch (err) {
         console.error('❌ MongoDB connection error:', err);
-        if (!mongod && env_js_1.ENV.NODE_ENV !== 'production') {
+        if (!env_js_1.ENV.MONGODB_URI && !mongod && env_js_1.ENV.NODE_ENV !== 'production') {
             console.log('🔄 Attempting fallback to in-memory MongoDB...');
             mongod = await mongodb_memory_server_1.MongoMemoryServer.create();
             const uri = mongod.getUri();

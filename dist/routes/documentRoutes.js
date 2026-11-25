@@ -7,6 +7,7 @@ const router = (0, express_1.Router)();
 // All document management routes require admin authentication
 router.use(authMiddleware_js_1.requireAdminAuth);
 router.post('/', documentController_js_1.upload.single('file'), documentController_js_1.DocumentController.uploadDocument);
+router.post('/faq', documentController_js_1.DocumentController.addFaq);
 router.get('/', documentController_js_1.DocumentController.listDocuments);
 router.get('/:id', documentController_js_1.DocumentController.getDocument);
 router.post('/:id/reindex', documentController_js_1.DocumentController.reindexDocument);

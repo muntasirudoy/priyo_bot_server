@@ -11,6 +11,24 @@ export class RagService {
   public static retrievalConfidence(chunks: VectorSearchResult[]): number {
     return Math.max(0, ...chunks.map((c) => Math.max(c.similarityScore, c.lexicalScore ?? 0, c.rerankerScore ?? 0)));
   }
+  private static groundedFallback(question: string, chunks: VectorSearchResult[], fallback: string): string {
+    const top = [...chunks].sort((a, b) => Math.max(b.similarityScore, b.lexicalScore ?? 0, b.rerankerScore ?? 0) - Math.max(a.similarityScore, a.lexicalScore ?? 0, a.rerankerScore ?? 0))[0];
+    if (!top) return fallback;
+    const faq = /^Question:[^\n]*\nAnswer:\s*([\s\S]+)/i.exec(top.content);
+    if (faq) return faq[1].trim().slice(0, 600);
+    const tokens = new Set((question.toLowerCase().match(/[\p{L}\p{N}]{3,}/gu) || []).filter((word) => !['what', 'the', 'this', 'that', 'with', 'your', 'companyr', 'nam', 'please'].includes(word)));
+    const sentences = top.content.replace(/\s*\n\s*/g, ' ').split(/(?<=[.!?।])\s+/).map((sentence) => sentence.replace(/https?:\/\/\S+/g, '').trim()).filter((sentence) => sentence.length > 25 && sentence.length < 350 && /[\p{L}]/u.test(sentence));
+    const ranked = sentences.map((sentence) => ({ sentence, matches: [...tokens].filter((token) => sentence.toLowerCase().includes(token)).length })).sort((a, b) => b.matches - a.matches || b.sentence.length - a.sentence.length);
+    if (ranked[0]?.matches) return ranked[0].sentence;
+    return fallback;
+  }
+  private static clarify(question: string, fallback: string): string {
+    if (/companyr?\s+nam|kon\s+company/i.test(question)) return 'Kon companyr kotha bolchen? Nam ba ektu context dile check kore bolte parbo.';
+    if (/company\s+name/i.test(question)) return 'Which company do you mean? Tell me its name or share a little context and I’ll check.';
+    if (/কোম্পানির নাম/i.test(question)) return 'কোন কোম্পানির কথা বলছেন? নাম বা একটু প্রসঙ্গ দিলে দেখে বলতে পারব।';
+    if (/[\u0980-\u09ff]/.test(question)) return 'আরেকটু বিস্তারিত বলবেন? তাহলে আমি সঠিক তথ্যটা খুঁজে দেখতে পারব।';
+    return fallback;
+  }
   public static async generateAnswer(
     userQuestion: string, chunks: VectorSearchResult[], history: { role: string; content: string }[] = [],
     intent: ChatIntent = 'KNOWLEDGE_QUERY', identity?: { userEmail: string; conversationId: Types.ObjectId },
@@ -26,9 +44,9 @@ export class RagService {
     const score = this.retrievalConfidence(chunks);
     if (score < config.confidenceThreshold) {
       if (identity) await UnansweredQuery.create({ query: userQuestion, userEmail: identity.userEmail, conversationId: identity.conversationId });
-      return { answer: config.fallbackMessage, confidence: 'low', needsHuman: false };
+      return { answer: this.clarify(userQuestion, config.fallbackMessage), confidence: 'low', needsHuman: false };
     }
-    if (!isGeminiConfigured()) return { answer: chunks[0].content.slice(0, 350), confidence: 'medium', needsHuman: false };
+    if (!isGeminiConfigured()) return { answer: this.groundedFallback(userQuestion, chunks, config.fallbackMessage), confidence: 'medium', needsHuman: false };
     try {
       const model = getGeminiClient().getGenerativeModel({ model: ENV.GEMINI_TEXT_MODEL, generationConfig: { temperature: 0.35, responseMimeType: 'application/json' } });
       const context = chunks.slice(0, 6).map((c) => c.content).join('\n\n');
@@ -41,6 +59,6 @@ Knowledge:\n${context}\nRecent chat:\n${history.slice(-5).map((m) => `${m.role}:
         return { answer: result.answer.trim(), confidence: result.confidence === 'high' || result.confidence === 'low' ? result.confidence : 'medium', needsHuman: Boolean(result.needsHuman) };
       }
     } catch (error) { console.warn('Answer generation failed:', error); }
-    return { answer: config.fallbackMessage, confidence: 'low', needsHuman: false };
+    return { answer: this.groundedFallback(userQuestion, chunks, config.fallbackMessage), confidence: 'medium', needsHuman: false };
   }
 }

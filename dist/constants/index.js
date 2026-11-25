@@ -14,7 +14,6 @@ exports.RAG_CONFIG = {
     RRF_K: 60,
     MAX_GRAPH_HOPS: 2,
     MAX_CONTEXT_MESSAGES: 10,
-    NO_INFO_FALLBACK: "I couldn't find this information in the available support documents. Please contact our support team for further assistance.",
 };
 exports.MULTILINGUAL_TERM_GROUPS = [
     ['refund', 'return', 'ফেরত', 'রিফান্ড', 'ferot', 'taka ferot'],

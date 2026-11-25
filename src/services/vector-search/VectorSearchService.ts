@@ -23,8 +23,10 @@ export class VectorSearchService {
     const dense = current.map((c) => ({ c, score: cosineSimilarity(queryEmbedding, c.embedding) }))
       .filter((x) => x.score >= (options?.similarityThreshold ?? RAG_CONFIG.DEFAULT_SIMILARITY_THRESHOLD))
       .sort((a, b) => b.score - a.score).slice(0, RAG_CONFIG.DENSE_CANDIDATES);
-    const queryTokens = new Set([...this.tokens(query.standalone || query.original), ...query.keywords.map((x) => x.toLowerCase())]);
-    const lexical = chunks.map((c) => { const words = this.tokens(`${c.sectionTitle || ''} ${c.content} ${(c.keywords || []).join(' ')}`); let matches = 0; for (const token of queryTokens) if (words.has(token)) matches++; return { c, score: queryTokens.size ? matches / queryTokens.size : 0 }; })
+    const stopwords = new Set(['a', 'an', 'the', 'is', 'are', 'was', 'who', 'what', 'where', 'when', 'how', 'i', 'you', 'your', 'my', 'of', 'for', 'in', 'on', 'to', 'ei', 'ki', 'k', 'ke', 'er', 'r', 'ta']);
+    const salient = (text: string) => new Set([...this.tokens(text)].filter((token) => !stopwords.has(token)));
+    const queryTokenSets = [salient(query.original), salient(query.standalone)].filter((set) => set.size > 0);
+    const lexical = chunks.map((c) => { const words = this.tokens(`${names.get(String(c.documentId)) || ''} ${c.sectionTitle || ''} ${c.content} ${(c.keywords || []).join(' ')}`); const score = Math.max(0, ...queryTokenSets.map((tokens) => [...tokens].filter((token) => words.has(token)).length / tokens.size)); return { c, score }; })
       .filter((x) => x.score > 0).sort((a, b) => b.score - a.score).slice(0, RAG_CONFIG.LEXICAL_CANDIDATES);
     const fused = new Map<string, { chunk: typeof chunks[number]; score: number; dense: number; lexical: number; channels: Set<string>; path?: string[] }>();
     const add = (chunk: typeof chunks[number], rank: number, channel: string, denseScore = 0, lexicalScore = 0, path?: string[]) => { const id = String(chunk._id); const item = fused.get(id) || { chunk, score: 0, dense: 0, lexical: 0, channels: new Set<string>() }; item.score += 1 / (RAG_CONFIG.RRF_K + rank + 1); item.dense = Math.max(item.dense, denseScore); item.lexical = Math.max(item.lexical, lexicalScore); item.channels.add(channel); if (path) item.path = path; fused.set(id, item); };

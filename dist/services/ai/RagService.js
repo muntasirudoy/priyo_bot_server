@@ -3,141 +3,72 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.RagService = void 0;
 const gemini_js_1 = require("../../config/gemini.js");
 const env_js_1 = require("../../config/env.js");
+const BotSettings_js_1 = require("../../models/BotSettings.js");
+const UnansweredQuery_js_1 = require("../../models/UnansweredQuery.js");
 const index_js_1 = require("../../constants/index.js");
 class RagService {
-    static get modelName() {
-        return env_js_1.ENV.GEMINI_TEXT_MODEL;
+    static isHumanEscalationRequested(message) { return index_js_1.HUMAN_ESCALATION_PHRASES.some((phrase) => message.toLowerCase().includes(phrase)); }
+    static retrievalConfidence(chunks) {
+        return Math.max(0, ...chunks.map((c) => Math.max(c.similarityScore, c.lexicalScore ?? 0, c.rerankerScore ?? 0)));
     }
-    /**
-     * Checks if user message explicitly requests human escalation.
-     */
-    static isHumanEscalationRequested(messageText) {
-        const lower = messageText.toLowerCase().trim();
-        return index_js_1.HUMAN_ESCALATION_PHRASES.some((phrase) => lower.includes(phrase));
+    static groundedFallback(question, chunks, fallback) {
+        const top = [...chunks].sort((a, b) => Math.max(b.similarityScore, b.lexicalScore ?? 0, b.rerankerScore ?? 0) - Math.max(a.similarityScore, a.lexicalScore ?? 0, a.rerankerScore ?? 0))[0];
+        if (!top)
+            return fallback;
+        const faq = /^Question:[^\n]*\nAnswer:\s*([\s\S]+)/i.exec(top.content);
+        if (faq)
+            return faq[1].trim().slice(0, 600);
+        const tokens = new Set((question.toLowerCase().match(/[\p{L}\p{N}]{3,}/gu) || []).filter((word) => !['what', 'the', 'this', 'that', 'with', 'your', 'companyr', 'nam', 'please'].includes(word)));
+        const sentences = top.content.replace(/\s*\n\s*/g, ' ').split(/(?<=[.!?।])\s+/).map((sentence) => sentence.replace(/https?:\/\/\S+/g, '').trim()).filter((sentence) => sentence.length > 25 && sentence.length < 350 && /[\p{L}]/u.test(sentence));
+        const ranked = sentences.map((sentence) => ({ sentence, matches: [...tokens].filter((token) => sentence.toLowerCase().includes(token)).length })).sort((a, b) => b.matches - a.matches || b.sentence.length - a.sentence.length);
+        if (ranked[0]?.matches)
+            return ranked[0].sentence;
+        return fallback;
     }
-    /**
-     * Builds the strict grounding prompt and calls Gemini Text Model.
-     */
-    static async generateAnswer(userQuestion, retrievedChunks, recentHistory = []) {
-        // 1. Explicit human escalation check
-        const wantsHuman = this.isHumanEscalationRequested(userQuestion);
-        if (wantsHuman) {
-            return {
-                answer: 'I have flagged your request for a human support representative. An agent will be with you shortly.',
-                confidence: 'high',
-                needsHuman: true,
-            };
+    static clarify(question, fallback) {
+        if (/companyr?\s+nam|kon\s+company/i.test(question))
+            return 'Kon companyr kotha bolchen? Nam ba ektu context dile check kore bolte parbo.';
+        if (/company\s+name/i.test(question))
+            return 'Which company do you mean? Tell me its name or share a little context and I’ll check.';
+        if (/কোম্পানির নাম/i.test(question))
+            return 'কোন কোম্পানির কথা বলছেন? নাম বা একটু প্রসঙ্গ দিলে দেখে বলতে পারব।';
+        if (/[\u0980-\u09ff]/.test(question))
+            return 'আরেকটু বিস্তারিত বলবেন? তাহলে আমি সঠিক তথ্যটা খুঁজে দেখতে পারব।';
+        return fallback;
+    }
+    static async generateAnswer(userQuestion, chunks, history = [], intent = 'KNOWLEDGE_QUERY', identity, settings) {
+        const config = settings ?? await (0, BotSettings_js_1.getBotSettings)();
+        if (intent === 'HUMAN_NEEDED')
+            return { answer: 'I hear you. I’ve asked our support team to take over this chat and follow up at your email.', confidence: 'high', needsHuman: true };
+        if (intent === 'CHITCHAT') {
+            const bangla = /[\u0980-\u09ff]/.test(userQuestion);
+            const thanks = /thank|ধন্যবাদ|dhonnobad/i.test(userQuestion);
+            return { answer: bangla ? (thanks ? 'আপনাকে স্বাগতম! আর কিছুতে সাহায্য করতে পারি?' : 'হ্যালো! কীভাবে সাহায্য করতে পারি?') : (thanks ? 'You’re welcome! Anything else I can help with?' : 'Hi! What can I help you with?'), confidence: 'high', needsHuman: false };
         }
-        // 2. If no chunks found above threshold, do not hallucinate
-        if (!retrievedChunks || retrievedChunks.length === 0) {
-            return {
-                answer: index_js_1.RAG_CONFIG.NO_INFO_FALLBACK,
-                confidence: 'low',
-                needsHuman: false,
-            };
+        const score = this.retrievalConfidence(chunks);
+        if (score < config.confidenceThreshold) {
+            if (identity)
+                await UnansweredQuery_js_1.UnansweredQuery.create({ query: userQuestion, userEmail: identity.userEmail, conversationId: identity.conversationId });
+            return { answer: this.clarify(userQuestion, config.fallbackMessage), confidence: 'low', needsHuman: false };
         }
-        // 3. Fallback when Gemini is not configured
-        if (!(0, gemini_js_1.isGeminiConfigured)()) {
-            console.warn('⚠️ Gemini API key not configured. Generating grounded answer from top chunk.');
-            const topChunk = retrievedChunks[0];
-            return {
-                answer: `Based on ${topChunk.documentName} (Page ${topChunk.pageNumber}):\n\n${topChunk.content.slice(0, 300)}...`,
-                confidence: 'medium',
-                needsHuman: false,
-            };
-        }
+        if (!(0, gemini_js_1.isGeminiConfigured)())
+            return { answer: this.groundedFallback(userQuestion, chunks, config.fallbackMessage), confidence: 'medium', needsHuman: false };
         try {
-            const client = (0, gemini_js_1.getGeminiClient)();
-            console.log(`🤖 Calling Gemini Text Model (${this.modelName}) for grounded answer generation...`);
-            const model = client.getGenerativeModel({
-                model: this.modelName,
-                generationConfig: {
-                    temperature: 0.2, // Low temperature for high factual grounding
-                    responseMimeType: 'application/json',
-                },
-            });
-            // Construct context from retrieved chunks
-            const contextBlocks = retrievedChunks
-                .map((c, idx) => `[Source ${idx + 1}: ${c.documentName} | Page: ${c.pageNumber}]\n${c.content}`
-                + (c.graphPath?.length ? `\nGraph relationship: ${c.graphPath.join(' -> ')}` : ''))
-                .join('\n\n---\n\n');
-            const historyFormatted = recentHistory
-                .slice(-index_js_1.RAG_CONFIG.MAX_CONTEXT_MESSAGES)
-                .map((m) => `${m.role === 'USER' ? 'Customer' : 'Assistant'}: ${m.content}`)
-                .join('\n');
-            const prompt = `
-You are a customer support AI assistant.
-Your job is to answer the customer's question using ONLY the information provided in the retrieved knowledge base context below.
-Do not invent information.
-Do not assume information that is not present.
-If the answer cannot be determined from the provided context, clearly say: "${index_js_1.RAG_CONFIG.NO_INFO_FALLBACK}".
-Do not fabricate prices, policies, delivery times, product information, guarantees, or company information.
-Keep answers concise, clear, and helpful.
-Reply in the customer's language (Bangla, English, or Banglish) when practical.
-If evidence is related but insufficient for an exact answer, explain the supported related information and ask one concise clarifying question.
-If the user indicates frustration or explicitly asks to speak to someone, set needsHuman to true.
-
-Output your answer strictly in the following JSON format:
-{
-  "answer": "Grounded answer text here",
-  "confidence": "high" | "medium" | "low",
-  "needsHuman": false | true
-}
-
---- RETRIEVED KNOWLEDGE BASE CONTEXT ---
-${contextBlocks}
-
---- RECENT CONVERSATION HISTORY ---
-${historyFormatted || 'None'}
-
---- CURRENT CUSTOMER QUESTION ---
-${userQuestion}
-`;
-            const response = await model.generateContent(prompt);
-            const rawText = response.response.text();
-            return this.parseAndValidateResponse(rawText);
-        }
-        catch (error) {
-            console.error('❌ Error calling Gemini Text Model:', error);
-            // Fallback gracefully without crashing
-            return {
-                answer: 'I am currently having difficulty retrieving an answer. Please try again or ask to speak to human support.',
-                confidence: 'low',
-                needsHuman: false,
-            };
-        }
-    }
-    /**
-     * Safely parses and validates structured JSON response from Gemini.
-     * If parsing fails, cleanly falls back without throwing.
-     */
-    static parseAndValidateResponse(rawText) {
-        try {
-            // Strip markdown code fences if present (e.g. ```json ... ```)
-            const cleaned = rawText
-                .replace(/^```json\s*/i, '')
-                .replace(/^```\s*/, '')
-                .replace(/```\s*$/, '')
-                .trim();
-            const parsed = JSON.parse(cleaned);
-            if (typeof parsed.answer === 'string' && parsed.answer.trim().length > 0) {
-                return {
-                    answer: parsed.answer.trim(),
-                    confidence: ['high', 'medium', 'low'].includes(parsed.confidence)
-                        ? parsed.confidence
-                        : 'medium',
-                    needsHuman: Boolean(parsed.needsHuman),
-                };
+            const model = (0, gemini_js_1.getGeminiClient)().getGenerativeModel({ model: env_js_1.ENV.GEMINI_TEXT_MODEL, generationConfig: { temperature: 0.35, responseMimeType: 'application/json' } });
+            const context = chunks.slice(0, 6).map((c) => c.content).join('\n\n');
+            const prompt = `You are ${config.botName}, a ${config.tone} customer support person. Answer only from the supplied support knowledge. Never invent policies, prices, or promises. Write 2–4 concise conversational sentences in the customer's English, Bangla, or Banglish style. Avoid AI clichés such as "Certainly!", "Great question!", "Based on the provided document", and long lists. When evidence is incomplete, ask one natural clarifying question or offer a support team follow-up at their email. Return JSON: {"answer":"...","confidence":"high|medium|low","needsHuman":false}.
+Knowledge:\n${context}\nRecent chat:\n${history.slice(-5).map((m) => `${m.role}: ${m.content}`).join('\n')}\nCustomer: ${userQuestion}`;
+            const raw = (await model.generateContent(prompt)).response.text().replace(/^```json\s*|^```\s*|```$/g, '').trim();
+            const parsed = JSON.parse(raw);
+            if (typeof parsed === 'object' && parsed !== null && 'answer' in parsed && typeof parsed.answer === 'string' && parsed.answer.trim()) {
+                const result = parsed;
+                return { answer: result.answer.trim(), confidence: result.confidence === 'high' || result.confidence === 'low' ? result.confidence : 'medium', needsHuman: Boolean(result.needsHuman) };
             }
         }
-        catch {
-            // JSON parse failed; fallback to raw text
+        catch (error) {
+            console.warn('Answer generation failed:', error);
         }
-        return {
-            answer: rawText.replace(/```json/g, '').replace(/```/g, '').trim(),
-            confidence: 'medium',
-            needsHuman: false,
-        };
+        return { answer: this.groundedFallback(userQuestion, chunks, config.fallbackMessage), confidence: 'medium', needsHuman: false };
     }
 }
 exports.RagService = RagService;

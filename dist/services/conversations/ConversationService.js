@@ -8,14 +8,19 @@ class ConversationService {
     /**
      * Find existing conversation by sessionId or create a new one.
      */
-    static async getOrCreateConversation(sessionId, siteId = 'default') {
+    static async getOrCreateConversation(sessionId, siteId = 'default', userEmail, userName) {
         let conversation = await Conversation_js_1.Conversation.findOne({ sessionId });
         if (!conversation) {
             conversation = await Conversation_js_1.Conversation.create({
                 sessionId,
                 siteId,
-                status: 'ACTIVE',
+                userEmail,
+                userName,
+                status: 'bot',
             });
+        }
+        else if (userEmail && conversation.userEmail !== userEmail) {
+            throw new Error('This session belongs to another email address. Start a new chat session.');
         }
         return conversation;
     }
@@ -72,6 +77,8 @@ class ConversationService {
                 id: conv._id.toString(),
                 sessionId: conv.sessionId,
                 siteId: conv.siteId,
+                userEmail: conv.userEmail,
+                userName: conv.userName,
                 status: conv.status,
                 createdAt: conv.createdAt,
                 updatedAt: conv.updatedAt,
@@ -106,6 +113,8 @@ class ConversationService {
                 id: conversation._id.toString(),
                 sessionId: conversation.sessionId,
                 siteId: conversation.siteId,
+                userEmail: conversation.userEmail,
+                userName: conversation.userName,
                 status: conversation.status,
                 createdAt: conversation.createdAt,
                 updatedAt: conversation.updatedAt,
