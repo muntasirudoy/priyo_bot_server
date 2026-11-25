@@ -4,6 +4,18 @@ import { MULTILINGUAL_TERM_GROUPS } from '../../constants/index.js';
 import { ExpandedQuery, ChatIntent } from '../../types/index.js';
 
 export class QueryUnderstandingService {
+  public static contextDocumentId(topic: string, messages: { role: string; content: string; sources?: { documentId: string; documentName?: string }[] }[]): string | undefined {
+    for (let index = messages.length - 1; index >= 0; index--) {
+      if (messages[index].role !== 'USER' || !messages[index].content.toLowerCase().includes(topic.toLowerCase())) continue;
+      for (let next = index + 1; next < messages.length && messages[next].role !== 'USER'; next++) {
+        const sources = messages[next].sources || [];
+        const matching = sources.find((source) => source.documentName?.toLowerCase().includes(topic.toLowerCase()));
+        if (matching) return matching.documentId;
+        if (sources.length === 1) return sources[0].documentId;
+      }
+    }
+    return undefined;
+  }
   public static classifyIntent(message: string): ChatIntent {
     const text = message.toLowerCase().trim();
     if (/\b(human|agent|representative|real person|escalat|complain|frustrat|refund|supervisor)\b|মানুষ|এজেন্ট|রিফান্ড|ফেরত|manush|agent chai/i.test(text)) return 'HUMAN_NEEDED';
@@ -15,19 +27,33 @@ export class QueryUnderstandingService {
   }
 
   private static localExpand(question: string, history: { role: string; content: string }[] = []): ExpandedQuery {
-    let standalone = question;
-    const asksAboutWork = /\b(company|employer|work|works|working|currently|job|kaj|chakri|kore|korche)\b|কোম্পানি|কাজ|চাকরি/i.test(question);
-    const prior = [...history].reverse().filter((item) => item.role === 'USER').map((item) => item.content.match(/\b([\p{L}]{3,})\s+(?:k|ke|who|কে)\??/iu)?.[1] || item.content.match(/\bwho\s+is\s+([\p{L}]{3,})/iu)?.[1]).find(Boolean);
-    const shortFollowUp = this.tokens(question).length <= 12 && /\b(kon|ki|kothay|kobe|kar|tar|se|uni|who|what|where|when|which|does|his|her|their|he|she)\b|কোন|কোথায়|তার|তিনি/i.test(question);
-    if (prior && !question.toLowerCase().includes(prior.toLowerCase()) && (asksAboutWork || shortFollowUp)) {
-      standalone = asksAboutWork ? `${prior} current company employer workplace` : `${prior} ${question}`;
+    const prior = [...history].reverse().filter((item) => item.role === 'USER').map((item) =>
+      item.content.match(/\b([\p{L}]{3,})\s+(?:k|ke|who|কে)\??/iu)?.[1]
+      || item.content.match(/\bwho\s+is\s+([\p{L}]{3,})/iu)?.[1]
+      || item.content.match(/\b(?:about|regarding)\s+([\p{L}]{3,})/iu)?.[1]
+    ).find(Boolean);
+    const hasTopic = Boolean(prior && !question.toLowerCase().includes(prior.toLowerCase()));
+    let followUpType: ExpandedQuery['followUpType'];
+    if (hasTopic) {
+      if (/\b(company|employer|workplace|kon company)\b|কোম্পানি/i.test(question)) followUpType = 'company';
+      else if (/\b(ki kore|kaj kore|kaj korche|occupation|profession|role|what does|job)\b|কী করে|কি করে|পেশা/i.test(question)) followUpType = 'role';
+      else if (/\b(details|detail|aro|more|bistar|experience)\b|বিস্তারিত|আরও/i.test(question)) followUpType = 'details';
+      else if (/^\s*(r|ar|আর)\s*\?\s*$/i.test(question)) followUpType = 'ambiguous';
+      else if (this.tokens(question).length <= 12 && /\b(kon|ki|kothay|kobe|kar|tar|se|uni|who|what|where|when|which|does|his|her|their|he|she)\b|কোন|কোথায়|তার|তিনি/i.test(question)) followUpType = 'other';
     }
+    const standalone = followUpType === 'company' ? `${prior} current company employer`
+      : followUpType === 'role' ? `${prior} occupation profession job role`
+      : followUpType === 'details' ? `${prior} biography work experience details`
+      : followUpType === 'other' ? `${prior} ${question}` : question;
+    const variants = followUpType === 'company' ? [question, standalone, `${prior} employer`]
+      : followUpType === 'role' ? [question, standalone, `${prior} profession`]
+      : followUpType === 'details' ? [question, standalone, `${prior} experience`]
+      : standalone !== question ? [question, standalone] : [question];
     const terms = new Set(this.tokens(standalone));
     for (const group of MULTILINGUAL_TERM_GROUPS) {
       if (group.some((term) => question.toLowerCase().includes(term))) group.forEach((term) => terms.add(term));
     }
-    const subject = standalone !== question ? standalone.split(' ')[0] : '';
-    return { original: question, standalone, variants: standalone !== question ? (asksAboutWork ? [question, standalone, `${subject} company`] : [question, standalone]) : [question], keywords: [...terms], entities: subject ? [subject] : [] };
+    return { original: question, standalone, variants, keywords: [...terms], entities: prior && followUpType ? [prior] : [], contextTopic: prior && followUpType ? prior : undefined, followUpType };
   }
 
   public static async expand(
@@ -35,7 +61,7 @@ export class QueryUnderstandingService {
     history: { role: string; content: string }[] = []
   ): Promise<ExpandedQuery> {
     const local = this.localExpand(question, history);
-    if (local.standalone !== question) return local;
+    if (local.followUpType) return local;
     if (!isGeminiConfigured()) return local;
     try {
       const model = getGeminiClient().getGenerativeModel({

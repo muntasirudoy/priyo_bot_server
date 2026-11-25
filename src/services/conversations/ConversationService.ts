@@ -49,9 +49,10 @@ export class ConversationService {
    * Get recent messages for a conversation.
    */
   public static async getMessages(conversationId: Types.ObjectId | string, limit = 50): Promise<IMessage[]> {
-    return Message.find({ conversationId: new Types.ObjectId(conversationId) })
-      .sort({ createdAt: 1 })
+    const recent = await Message.find({ conversationId: new Types.ObjectId(conversationId) })
+      .sort({ createdAt: -1, _id: -1 })
       .limit(limit);
+    return recent.reverse();
   }
 
   /**

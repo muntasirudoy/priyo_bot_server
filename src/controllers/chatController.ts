@@ -53,17 +53,26 @@ export class ChatController {
         res.json({ success: true, answer: response.answer, sources: [], conversationId: conversation._id.toString(), needsHuman: response.needsHuman, status: response.needsHuman ? 'human_requested' : conversation.status }); return;
       }
 
-      const priorHistory = await ConversationService.getMessages(conversation._id, 10);
+      const priorHistory = await ConversationService.getMessages(conversation._id, 20);
       const priorContext = priorHistory.filter((m) => m.role === 'USER' || m.role === 'ASSISTANT' || m.role === 'AGENT').map((m) => ({ role: m.role, content: m.content }));
       const expandedQuery = await QueryUnderstandingService.expand(trimmedMessage, priorContext.slice(0, -1));
+      if (expandedQuery.followUpType === 'ambiguous' && expandedQuery.contextTopic) {
+        const answer = `${expandedQuery.contextTopic} somporke konta jante chan—tar kaj, experience, naki current company?`;
+        await ConversationService.addMessage(conversation._id, 'ASSISTANT', answer);
+        res.json({ success: true, answer, sources: [], conversationId: conversation._id.toString(), needsHuman: false, status: conversation.status }); return;
+      }
+      const previousMessages = priorHistory.slice(0, -1);
+      const topic = expandedQuery.contextTopic?.toLowerCase();
+      const anchorDocumentId = topic ? QueryUnderstandingService.contextDocumentId(topic, previousMessages) : undefined;
 
       // 3. Generate a semantic embedding for the standalone multilingual query
       console.log(`🔍 Generating query embedding for: "${trimmedMessage.slice(0, 50)}..."`);
       const queryEmbedding = await EmbeddingService.generateEmbedding(expandedQuery.standalone);
 
       // 4. Search relevant chunks via VectorSearchService
-      const fusedChunks = await VectorSearchService.searchHybrid(queryEmbedding, expandedQuery, { topK: 12 });
-      const retrievedChunks = await RetrievalReranker.rerank(expandedQuery.standalone, fusedChunks);
+      const fusedChunks = await VectorSearchService.searchHybrid(queryEmbedding, expandedQuery, { topK: 12, documentId: anchorDocumentId });
+      const scopedChunks = topic && !anchorDocumentId ? fusedChunks.filter((chunk) => `${chunk.documentName} ${chunk.content}`.toLowerCase().includes(topic)) : fusedChunks;
+      const retrievedChunks = await RetrievalReranker.rerank(expandedQuery.standalone, scopedChunks);
       console.log(`🎯 Found ${retrievedChunks.length} relevant chunk(s) above threshold.`);
 
       // 5. Get recent conversation history
@@ -76,7 +85,7 @@ export class ChatController {
       const aiResponse = await RagService.generateAnswer(
         trimmedMessage,
         retrievedChunks,
-        recentContextHistory, intent, { userEmail: conversation.userEmail, conversationId: conversation._id }, undefined, expandedQuery.standalone
+        recentContextHistory, intent, { userEmail: conversation.userEmail, conversationId: conversation._id }, undefined, expandedQuery.standalone, expandedQuery.followUpType, Boolean(anchorDocumentId)
       );
 
       // Handle human escalation
@@ -86,7 +95,7 @@ export class ChatController {
       }
 
       // Format sources for storage and response
-      const sources = retrievedChunks.map((chunk) => ({
+      const sources = (aiResponse.confidence === 'low' ? [] : retrievedChunks).map((chunk) => ({
         documentId: chunk.documentId,
         documentName: chunk.documentName,
         pageNumber: chunk.pageNumber,

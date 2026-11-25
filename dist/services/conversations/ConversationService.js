@@ -42,9 +42,10 @@ class ConversationService {
      * Get recent messages for a conversation.
      */
     static async getMessages(conversationId, limit = 50) {
-        return Message_js_1.Message.find({ conversationId: new mongoose_1.Types.ObjectId(conversationId) })
-            .sort({ createdAt: 1 })
+        const recent = await Message_js_1.Message.find({ conversationId: new mongoose_1.Types.ObjectId(conversationId) })
+            .sort({ createdAt: -1, _id: -1 })
             .limit(limit);
+        return recent.reverse();
     }
     /**
      * Update conversation status (e.g. to HUMAN_REQUIRED).

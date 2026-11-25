@@ -18,6 +18,8 @@ export interface ExpandedQuery {
   variants: string[];
   keywords: string[];
   entities: string[];
+  contextTopic?: string;
+  followUpType?: 'company' | 'role' | 'details' | 'ambiguous' | 'other';
 }
 
 export interface StructuredAiResponse {

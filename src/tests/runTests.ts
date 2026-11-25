@@ -100,7 +100,19 @@ async function runAllTests() {
   const evidence = { chunkId: '1', documentId: '1', documentName: 'FAQ', content: 'Company name', pageNumber: 1, chunkIndex: 0, similarityScore: 0, lexicalScore: 0.8, rerankerScore: 0.9 };
   assert(RagService.retrievalConfidence([evidence]) === 0.9, 'Lexical and reranker evidence can pass the answer threshold');
   const followUp = await QueryUnderstandingService.expand('kon company te kaj kore?', [{ role: 'USER', content: 'tosar k?' }, { role: 'ASSISTANT', content: 'Tosar Das Shuvo is a product manager.' }]);
-  assert(followUp.standalone.toLowerCase().includes('tosar') && followUp.variants.some((variant) => variant.toLowerCase().includes('tosar company')), 'Follow-up company query retains the person from chat history');
+  assert(followUp.standalone.toLowerCase().includes('tosar') && followUp.variants.some((variant) => variant.toLowerCase().includes('tosar employer')), 'Follow-up company query retains the person from chat history');
+  const roleFollowUp = await QueryUnderstandingService.expand('r ki kore?', [{ role: 'USER', content: 'tosar k?' }, { role: 'ASSISTANT', content: 'Tosar is a product manager.' }]);
+  assert(roleFollowUp.followUpType === 'role' && roleFollowUp.standalone.includes('tosar') && !roleFollowUp.standalone.includes('company'), 'Short Banglish follow-up asks about the same person’s role');
+  const detailFollowUp = await QueryUnderstandingService.expand('ro details a bolo', [{ role: 'USER', content: 'tosar k?' }]);
+  assert(detailFollowUp.followUpType === 'details' && detailFollowUp.standalone.includes('tosar'), 'Details request retains the prior subject');
+  const anchoredDocument = QueryUnderstandingService.contextDocumentId('tosar', [
+    { role: 'USER', content: 'tosar k?' }, { role: 'ASSISTANT', content: 'Tosar is a product manager.', sources: [{ documentId: 'priyoshop-doc', documentName: 'PriyoShop.pdf' }, { documentId: 'tosar-doc', documentName: 'Tosar.pdf' }] },
+    { role: 'USER', content: 'r ki kore?' }, { role: 'ASSISTANT', content: 'An unrelated answer.', sources: [{ documentId: 'priyoshop-doc' }] },
+  ]);
+  assert(anchoredDocument === 'tosar-doc', 'Follow-up retrieval stays within the named subject’s source document');
+  const tosarChunk = { ...evidence, documentId: 'tosar-doc', documentName: 'Tosar.pdf', content: 'Tosar Das Shuvo is a Product Manager with seven years of experience.' };
+  assert(RagService.groundedFallback('tosar occupation profession job role', [tosarChunk], 'uncertain', 'role').includes('Product Manager'), 'Role follow-up extracts a role from the anchored source');
+  assert(RagService.groundedFallback('tosar current company employer', [tosarChunk], 'uncertain', 'company') === 'uncertain', 'A role alone does not invent a current employer');
 
   // Test 7: JWT Auth
   console.log('\n--- 7. JWT Auth Tests ---');
