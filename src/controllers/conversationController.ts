@@ -47,10 +47,10 @@ export class ConversationController {
       const { id } = req.params;
       const { status } = req.body;
 
-      if (!status || !['bot', 'human_requested', 'agent_active', 'resolved'].includes(status)) {
+      if (!status || !['ACTIVE', 'HUMAN_REQUIRED', 'CLOSED'].includes(status)) {
         res.status(400).json({
           success: false,
-          message: 'Invalid conversation status.',
+          message: 'Invalid status. Must be ACTIVE, HUMAN_REQUIRED, or CLOSED.',
           code: 'INVALID_STATUS',
         });
         return;
@@ -81,16 +81,5 @@ export class ConversationController {
     } catch (err) {
       next(err);
     }
-  }
-  public static async sendReply(req: Request, res: Response, next: NextFunction): Promise<void> {
-    try {
-      const { id } = req.params;
-      const { message } = req.body;
-      if (typeof message !== 'string' || !message.trim() || message.length > 5000) { res.status(400).json({ success: false, message: 'A reply is required.' }); return; }
-      const conversation = await ConversationService.updateStatus(id, 'agent_active');
-      if (!conversation) { res.status(404).json({ success: false, message: 'Conversation not found.' }); return; }
-      const saved = await ConversationService.addMessage(conversation._id, 'AGENT', message.trim());
-      res.status(201).json({ success: true, data: { id: saved._id.toString(), status: conversation.status } });
-    } catch (err) { next(err); }
   }
 }

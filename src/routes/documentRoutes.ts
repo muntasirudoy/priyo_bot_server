@@ -8,7 +8,6 @@ const router = Router();
 router.use(requireAdminAuth as any);
 
 router.post('/', upload.single('file'), DocumentController.uploadDocument);
-router.post('/faq', DocumentController.addFaq);
 router.get('/', DocumentController.listDocuments);
 router.get('/:id', DocumentController.getDocument);
 router.post('/:id/reindex', DocumentController.reindexDocument);

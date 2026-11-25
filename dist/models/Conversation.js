@@ -44,12 +44,10 @@ const ConversationSchema = new mongoose_1.Schema({
         trim: true,
     },
     siteId: { type: String, trim: true, maxlength: 100, default: 'default', index: true },
-    userEmail: { type: String, required: true, lowercase: true, trim: true, index: true },
-    userName: { type: String, trim: true, maxlength: 120 },
     status: {
         type: String,
-        enum: ['bot', 'human_requested', 'agent_active', 'resolved'],
-        default: 'bot',
+        enum: ['ACTIVE', 'HUMAN_REQUIRED', 'CLOSED'],
+        default: 'ACTIVE',
         required: true,
     },
 }, {

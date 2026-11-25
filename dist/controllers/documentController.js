@@ -12,7 +12,6 @@ const DocumentChunk_js_1 = require("../models/DocumentChunk.js");
 const PdfProcessor_js_1 = require("../services/documents/PdfProcessor.js");
 const env_js_1 = require("../config/env.js");
 const GraphRagService_js_1 = require("../services/graph/GraphRagService.js");
-const EmbeddingService_js_1 = require("../services/embedding/EmbeddingService.js");
 // Ensure uploads directory exists
 if (!fs_1.default.existsSync(env_js_1.ENV.UPLOAD_DIR)) {
     fs_1.default.mkdirSync(env_js_1.ENV.UPLOAD_DIR, { recursive: true });
@@ -44,29 +43,6 @@ exports.upload = (0, multer_1.default)({
     },
 });
 class DocumentController {
-    static async addFaq(req, res, next) {
-        try {
-            const { question, answer } = req.body;
-            if (typeof question !== 'string' || typeof answer !== 'string' || !question.trim() || !answer.trim() || question.length > 1000 || answer.length > 5000) {
-                res.status(400).json({ success: false, message: 'A question and answer are required.' });
-                return;
-            }
-            const content = `Question: ${question.trim()}\nAnswer: ${answer.trim()}`;
-            const embedding = await EmbeddingService_js_1.EmbeddingService.generateEmbedding(content);
-            const document = await Document_js_1.DocumentModel.create({ filename: `faq-${Date.now()}`, originalName: `FAQ: ${question.trim().slice(0, 80)}`, fileUrl: '', status: 'COMPLETED', graphStatus: 'COMPLETED', totalChunks: 1, ingestionVersion: 'faq-v1' });
-            try {
-                await DocumentChunk_js_1.DocumentChunk.create({ documentId: document._id, content, embedding, pageNumber: 1, chunkIndex: 0, sectionTitle: question.trim(), keywords: question.toLowerCase().match(/[\p{L}\p{N}]+/gu) || [], embeddingModel: env_js_1.ENV.GEMINI_EMBEDDING_MODEL, embeddingVersion: env_js_1.ENV.EMBEDDING_VERSION, embeddingDimension: embedding.length, ingestionVersion: 'faq-v1', metadata: { type: 'faq' } });
-            }
-            catch (error) {
-                await Document_js_1.DocumentModel.findByIdAndDelete(document._id);
-                throw error;
-            }
-            res.status(201).json({ success: true, data: { document: { id: document._id.toString(), originalName: document.originalName, status: document.status } } });
-        }
-        catch (err) {
-            next(err);
-        }
-    }
     static async reindexDocument(req, res, next) {
         try {
             const document = await Document_js_1.DocumentModel.findById(req.params.id);

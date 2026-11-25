@@ -9,6 +9,5 @@ router.use(requireAdminAuth as any);
 router.get('/', ConversationController.listConversations);
 router.get('/:id', ConversationController.getConversation);
 router.patch('/:id/status', ConversationController.updateStatus);
-router.post('/:id/reply', ConversationController.sendReply);
 
 export default router;

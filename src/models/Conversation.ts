@@ -4,8 +4,6 @@ import { ConversationStatus } from '../types/index.js';
 export interface IConversation extends MongooseDoc {
   sessionId: string;
   siteId?: string;
-  userEmail: string;
-  userName?: string;
   status: ConversationStatus;
   createdAt: Date;
   updatedAt: Date;
@@ -21,12 +19,10 @@ const ConversationSchema = new Schema<IConversation>(
       trim: true,
     },
     siteId: { type: String, trim: true, maxlength: 100, default: 'default', index: true },
-    userEmail: { type: String, required: true, lowercase: true, trim: true, index: true },
-    userName: { type: String, trim: true, maxlength: 120 },
     status: {
       type: String,
-      enum: ['bot', 'human_requested', 'agent_active', 'resolved'],
-      default: 'bot',
+      enum: ['ACTIVE', 'HUMAN_REQUIRED', 'CLOSED'],
+      default: 'ACTIVE',
       required: true,
     },
   },

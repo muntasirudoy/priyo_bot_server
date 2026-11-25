@@ -6,8 +6,4 @@ const authMiddleware_js_1 = require("../middleware/authMiddleware.js");
 const router = (0, express_1.Router)();
 router.use(authMiddleware_js_1.requireAdminAuth);
 router.get('/dashboard', adminController_js_1.AdminController.getDashboardStats);
-router.get('/settings', adminController_js_1.AdminController.getSettings);
-router.put('/settings', adminController_js_1.AdminController.updateSettings);
-router.get('/knowledge-gaps', adminController_js_1.AdminController.getKnowledgeGaps);
-router.patch('/knowledge-gaps/:id/resolve', adminController_js_1.AdminController.resolveKnowledgeGap);
 exports.default = router;
