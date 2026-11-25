@@ -7,6 +7,7 @@ import { DocumentChunk } from '../models/DocumentChunk.js';
 import { PdfProcessor } from '../services/documents/PdfProcessor.js';
 import { ENV } from '../config/env.js';
 import { GraphRagService } from '../services/graph/GraphRagService.js';
+import { EmbeddingService } from '../services/embedding/EmbeddingService.js';
 
 // Ensure uploads directory exists
 if (!fs.existsSync(ENV.UPLOAD_DIR)) {
@@ -41,6 +42,21 @@ export const upload = multer({
 });
 
 export class DocumentController {
+  public static async addFaq(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { question, answer } = req.body;
+      if (typeof question !== 'string' || typeof answer !== 'string' || !question.trim() || !answer.trim() || question.length > 1000 || answer.length > 5000) {
+        res.status(400).json({ success: false, message: 'A question and answer are required.' }); return;
+      }
+      const content = `Question: ${question.trim()}\nAnswer: ${answer.trim()}`;
+      const embedding = await EmbeddingService.generateEmbedding(content);
+      const document = await DocumentModel.create({ filename: `faq-${Date.now()}`, originalName: `FAQ: ${question.trim().slice(0, 80)}`, fileUrl: '', status: 'COMPLETED', graphStatus: 'COMPLETED', totalChunks: 1, ingestionVersion: 'faq-v1' });
+      try {
+        await DocumentChunk.create({ documentId: document._id, content, embedding, pageNumber: 1, chunkIndex: 0, sectionTitle: question.trim(), keywords: question.toLowerCase().match(/[\p{L}\p{N}]+/gu) || [], embeddingModel: ENV.GEMINI_EMBEDDING_MODEL, embeddingVersion: ENV.EMBEDDING_VERSION, embeddingDimension: embedding.length, ingestionVersion: 'faq-v1', metadata: { type: 'faq' } });
+      } catch (error) { await DocumentModel.findByIdAndDelete(document._id); throw error; }
+      res.status(201).json({ success: true, data: { document: { id: document._id.toString(), originalName: document.originalName, status: document.status } } });
+    } catch (err) { next(err); }
+  }
   public static async reindexDocument(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const document = await DocumentModel.findById(req.params.id);

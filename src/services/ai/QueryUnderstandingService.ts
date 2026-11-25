@@ -1,9 +1,15 @@
 import { getGeminiClient, isGeminiConfigured } from '../../config/gemini.js';
 import { ENV } from '../../config/env.js';
 import { MULTILINGUAL_TERM_GROUPS } from '../../constants/index.js';
-import { ExpandedQuery } from '../../types/index.js';
+import { ExpandedQuery, ChatIntent } from '../../types/index.js';
 
 export class QueryUnderstandingService {
+  public static classifyIntent(message: string): ChatIntent {
+    const text = message.toLowerCase().trim();
+    if (/\b(human|agent|representative|real person|escalat|complain|frustrat|refund|supervisor)\b|মানুষ|এজেন্ট|রিফান্ড|ফেরত|manush|agent chai/i.test(text)) return 'HUMAN_NEEDED';
+    if (/^(hi|hello|hey|thanks|thank you|bye|good morning|good evening|how are you|assalamu alaikum|salam|ধন্যবাদ|হ্যালো|কেমন আছো)[!?.\s]*$/i.test(text)) return 'CHITCHAT';
+    return 'KNOWLEDGE_QUERY';
+  }
   private static tokens(text: string): string[] {
     return text.toLowerCase().match(/[\p{L}\p{N}]+/gu) || [];
   }
@@ -31,7 +37,7 @@ export class QueryUnderstandingService {
 Support Bangla, English and romanized Banglish. Return JSON only:
 {"standalone":"","variants":["English semantic rewrite","Bangla semantic rewrite"],"keywords":[],"entities":[]}
 Do not answer the question and do not invent named entities.
-History: ${history.slice(-6).map((m) => `${m.role}: ${m.content}`).join('\n') || 'None'}
+History: ${history.slice(-5).map((m) => `${m.role}: ${m.content}`).join('\n') || 'None'}
 Question: ${question}`;
       const parsed = JSON.parse((await model.generateContent(prompt)).response.text());
       return {

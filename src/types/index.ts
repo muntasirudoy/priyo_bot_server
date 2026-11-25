@@ -1,6 +1,8 @@
 export type DocumentStatus = 'UPLOADING' | 'PROCESSING' | 'COMPLETED' | 'FAILED';
-export type ConversationStatus = 'ACTIVE' | 'HUMAN_REQUIRED' | 'CLOSED';
-export type MessageRole = 'USER' | 'ASSISTANT' | 'SYSTEM';
+export type ConversationStatus = 'bot' | 'human_requested' | 'agent_active' | 'resolved';
+export type MessageRole = 'USER' | 'ASSISTANT' | 'AGENT' | 'SYSTEM';
+export type ChatIntent = 'CHITCHAT' | 'KNOWLEDGE_QUERY' | 'HUMAN_NEEDED';
+export interface BotSettingsData { botName: string; tone: 'friendly' | 'professional' | 'casual'; greetingMessage: string; fallbackMessage: string; confidenceThreshold: number; }
 
 export interface SourceReference {
   documentId: string;
@@ -49,6 +51,7 @@ export interface VectorSearchResult {
   retrievalChannels?: string[];
   fusedScore?: number;
   rerankerScore?: number;
+  lexicalScore?: number;
   graphPath?: string[];
 }
 

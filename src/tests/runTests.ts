@@ -92,10 +92,12 @@ async function runAllTests() {
 
   // Test 6: RAG Structured Response with No Context (Fallback)
   console.log('\n--- 6. RAG Grounding & No Context Fallback ---');
-  const emptyContextResponse = await RagService.generateAnswer('What is your Mars policy?', []);
+  const emptyContextResponse = await RagService.generateAnswer('What is your Mars policy?', [], [], 'KNOWLEDGE_QUERY', undefined, { botName: 'Support', tone: 'friendly', greetingMessage: 'Hi', fallbackMessage: 'Could you tell me more? I can ask our team to follow up by email.', confidenceThreshold: 0.65 });
   assert(emptyContextResponse.confidence === 'low', 'Confidence is low when no context is found');
   assert(!emptyContextResponse.needsHuman, 'needsHuman is false by default');
-  assert(emptyContextResponse.answer.includes('couldn\'t find this information'), 'Returns standard grounded no-info message');
+  assert(emptyContextResponse.answer.includes('tell me more'), 'Returns a natural clarifying response');
+  const evidence = { chunkId: '1', documentId: '1', documentName: 'FAQ', content: 'Company name', pageNumber: 1, chunkIndex: 0, similarityScore: 0, lexicalScore: 0.8, rerankerScore: 0.9 };
+  assert(RagService.retrievalConfidence([evidence]) === 0.9, 'Lexical and reranker evidence can pass the answer threshold');
 
   // Test 7: JWT Auth
   console.log('\n--- 7. JWT Auth Tests ---');

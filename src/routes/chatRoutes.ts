@@ -3,6 +3,7 @@ import { ChatController } from '../controllers/chatController.js';
 import { chatRateLimiter } from '../middleware/rateLimiter.js';
 
 const router = Router();
+router.get('/greeting', ChatController.getGreeting);
 
 router.post('/message', chatRateLimiter, ChatController.sendMessage);
 router.get('/conversations/:sessionId', ChatController.getCustomerConversation);

@@ -7,14 +7,18 @@ export class ConversationService {
   /**
    * Find existing conversation by sessionId or create a new one.
    */
-  public static async getOrCreateConversation(sessionId: string, siteId = 'default'): Promise<IConversation> {
+  public static async getOrCreateConversation(sessionId: string, siteId = 'default', userEmail?: string, userName?: string): Promise<IConversation> {
     let conversation = await Conversation.findOne({ sessionId });
     if (!conversation) {
       conversation = await Conversation.create({
         sessionId,
         siteId,
-        status: 'ACTIVE',
+        userEmail,
+        userName,
+        status: 'bot',
       });
+    } else if (userEmail && conversation.userEmail !== userEmail) {
+      throw new Error('This session belongs to another email address. Start a new chat session.');
     }
     return conversation;
   }
@@ -24,7 +28,7 @@ export class ConversationService {
    */
   public static async addMessage(
     conversationId: Types.ObjectId | string,
-    role: 'USER' | 'ASSISTANT' | 'SYSTEM',
+    role: 'USER' | 'ASSISTANT' | 'AGENT' | 'SYSTEM',
     content: string,
     sources: SourceReference[] = []
   ): Promise<IMessage> {
@@ -95,6 +99,8 @@ export class ConversationService {
           id: conv._id.toString(),
           sessionId: conv.sessionId,
           siteId: conv.siteId,
+          userEmail: conv.userEmail,
+          userName: conv.userName,
           status: conv.status,
           createdAt: conv.createdAt,
           updatedAt: conv.updatedAt,
@@ -134,6 +140,8 @@ export class ConversationService {
         id: conversation._id.toString(),
         sessionId: conversation.sessionId,
         siteId: conversation.siteId,
+        userEmail: conversation.userEmail,
+        userName: conversation.userName,
         status: conversation.status,
         createdAt: conversation.createdAt,
         updatedAt: conversation.updatedAt,

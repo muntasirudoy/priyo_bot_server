@@ -5,14 +5,19 @@ import { VectorSearchService } from '../services/vector-search/VectorSearchServi
 import { RagService } from '../services/ai/RagService.js';
 import { QueryUnderstandingService } from '../services/ai/QueryUnderstandingService.js';
 import { RetrievalReranker } from '../services/ai/RetrievalReranker.js';
+import { Conversation } from '../models/Conversation.js';
+import { getBotSettings } from '../models/BotSettings.js';
 
 export class ChatController {
+  public static async getGreeting(_req: Request, res: Response, next: NextFunction): Promise<void> {
+    try { const settings = await getBotSettings(); res.json({ success: true, data: { botName: settings.botName, greetingMessage: settings.greetingMessage } }); } catch (err) { next(err); }
+  }
   /**
    * Main chat message handler for customer questions.
    */
   public static async sendMessage(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const { sessionId, message, siteId = 'default' } = req.body;
+      const { sessionId, message, siteId = 'default', userEmail, userName } = req.body;
 
       if (!sessionId || !message || typeof message !== 'string' || message.trim().length === 0) {
         res.status(400).json({
@@ -28,15 +33,28 @@ export class ChatController {
       }
 
       const trimmedMessage = message.trim();
+      if (typeof userEmail !== 'string' || !/^[^\s@]+@[^\s@]+\.[A-Za-z]{2,}$/.test(userEmail) || (userName !== undefined && (typeof userName !== 'string' || userName.length > 120))) {
+        res.status(400).json({ success: false, message: 'A valid userEmail is required.', code: 'INVALID_EMAIL' }); return;
+      }
 
       // 1. Find or create conversation
-      const conversation = await ConversationService.getOrCreateConversation(sessionId, siteId.trim() || 'default');
+      const conversation = await ConversationService.getOrCreateConversation(sessionId, siteId.trim() || 'default', userEmail.toLowerCase(), userName);
 
       // 2. Save USER message
       await ConversationService.addMessage(conversation._id, 'USER', trimmedMessage);
+      if (conversation.status === 'agent_active' || conversation.status === 'human_requested') {
+        res.json({ success: true, answer: '', sources: [], conversationId: conversation._id.toString(), needsHuman: true, status: conversation.status }); return;
+      }
+      const intent = QueryUnderstandingService.classifyIntent(trimmedMessage);
+      if (intent === 'HUMAN_NEEDED' || intent === 'CHITCHAT') {
+        const response = await RagService.generateAnswer(trimmedMessage, [], [], intent);
+        if (response.needsHuman) await ConversationService.updateStatus(conversation._id, 'human_requested');
+        await ConversationService.addMessage(conversation._id, 'ASSISTANT', response.answer);
+        res.json({ success: true, answer: response.answer, sources: [], conversationId: conversation._id.toString(), needsHuman: response.needsHuman, status: response.needsHuman ? 'human_requested' : conversation.status }); return;
+      }
 
       const priorHistory = await ConversationService.getMessages(conversation._id, 10);
-      const priorContext = priorHistory.filter((m) => m.role === 'USER' || m.role === 'ASSISTANT').map((m) => ({ role: m.role, content: m.content }));
+      const priorContext = priorHistory.filter((m) => m.role === 'USER' || m.role === 'ASSISTANT' || m.role === 'AGENT').map((m) => ({ role: m.role, content: m.content }));
       const expandedQuery = await QueryUnderstandingService.expand(trimmedMessage, priorContext.slice(0, -1));
 
       // 3. Generate a semantic embedding for the standalone multilingual query
@@ -51,20 +69,20 @@ export class ChatController {
       // 5. Get recent conversation history
       const history = priorHistory;
       const recentContextHistory = history
-        .filter((m) => m.role === 'USER' || m.role === 'ASSISTANT')
+        .filter((m) => m.role === 'USER' || m.role === 'ASSISTANT' || m.role === 'AGENT')
         .map((m) => ({ role: m.role, content: m.content }));
 
       // 6. & 7. Call Gemini text model & validate structured response
       const aiResponse = await RagService.generateAnswer(
         trimmedMessage,
         retrievedChunks,
-        recentContextHistory
+        recentContextHistory, intent, { userEmail: conversation.userEmail, conversationId: conversation._id }
       );
 
       // Handle human escalation
-      if (aiResponse.needsHuman && conversation.status !== 'HUMAN_REQUIRED') {
+      if (aiResponse.needsHuman) {
         console.log(`🚨 Escalating conversation ${conversation._id} to HUMAN_REQUIRED`);
-        await ConversationService.updateStatus(conversation._id, 'HUMAN_REQUIRED');
+        await ConversationService.updateStatus(conversation._id, 'human_requested');
       }
 
       // Format sources for storage and response
@@ -96,6 +114,7 @@ export class ChatController {
         sources: customerSources,
         conversationId: conversation._id.toString(),
         needsHuman: aiResponse.needsHuman,
+        status: aiResponse.needsHuman ? 'human_requested' : conversation.status,
       });
     } catch (err) {
       next(err);
@@ -118,7 +137,10 @@ export class ChatController {
         return;
       }
 
-      const conversation = await ConversationService.getOrCreateConversation(sessionId);
+      const conversation = await Conversation.findOne({ sessionId });
+      if (!conversation || conversation.userEmail !== String(req.query.userEmail || '').toLowerCase()) {
+        res.status(404).json({ success: false, message: 'Conversation unavailable.', code: 'CONVERSATION_NOT_FOUND' }); return;
+      }
       const messages = await ConversationService.getMessages(conversation._id);
 
       res.json({
@@ -128,6 +150,8 @@ export class ChatController {
             id: conversation._id.toString(),
             sessionId: conversation.sessionId,
             siteId: conversation.siteId,
+            userEmail: conversation.userEmail,
+            userName: conversation.userName,
             status: conversation.status,
             createdAt: conversation.createdAt,
           },

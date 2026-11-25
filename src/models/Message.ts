@@ -30,7 +30,7 @@ const MessageSchema = new Schema<IMessage>(
     },
     role: {
       type: String,
-      enum: ['USER', 'ASSISTANT', 'SYSTEM'],
+      enum: ['USER', 'ASSISTANT', 'AGENT', 'SYSTEM'],
       required: true,
     },
     content: {

@@ -26,13 +26,14 @@ export class VectorSearchService {
     const queryTokens = new Set([...this.tokens(query.standalone || query.original), ...query.keywords.map((x) => x.toLowerCase())]);
     const lexical = chunks.map((c) => { const words = this.tokens(`${c.sectionTitle || ''} ${c.content} ${(c.keywords || []).join(' ')}`); let matches = 0; for (const token of queryTokens) if (words.has(token)) matches++; return { c, score: queryTokens.size ? matches / queryTokens.size : 0 }; })
       .filter((x) => x.score > 0).sort((a, b) => b.score - a.score).slice(0, RAG_CONFIG.LEXICAL_CANDIDATES);
-    const fused = new Map<string, { chunk: typeof chunks[number]; score: number; dense: number; channels: Set<string>; path?: string[] }>();
-    const add = (chunk: typeof chunks[number], rank: number, channel: string, denseScore = 0, path?: string[]) => { const id = String(chunk._id); const item = fused.get(id) || { chunk, score: 0, dense: denseScore, channels: new Set<string>() }; item.score += 1 / (RAG_CONFIG.RRF_K + rank + 1); item.dense = Math.max(item.dense, denseScore); item.channels.add(channel); if (path) item.path = path; fused.set(id, item); };
-    dense.forEach((x, i) => add(x.c, i, 'dense', x.score)); lexical.forEach((x, i) => add(x.c, i, 'lexical'));
-    chunks.filter((c) => graphPaths.has(String(c._id))).forEach((c, i) => add(c, i, 'graph', 0, graphPaths.get(String(c._id))));
+    const fused = new Map<string, { chunk: typeof chunks[number]; score: number; dense: number; lexical: number; channels: Set<string>; path?: string[] }>();
+    const add = (chunk: typeof chunks[number], rank: number, channel: string, denseScore = 0, lexicalScore = 0, path?: string[]) => { const id = String(chunk._id); const item = fused.get(id) || { chunk, score: 0, dense: 0, lexical: 0, channels: new Set<string>() }; item.score += 1 / (RAG_CONFIG.RRF_K + rank + 1); item.dense = Math.max(item.dense, denseScore); item.lexical = Math.max(item.lexical, lexicalScore); item.channels.add(channel); if (path) item.path = path; fused.set(id, item); };
+    dense.forEach((x, i) => add(x.c, i, 'dense', x.score)); lexical.forEach((x, i) => add(x.c, i, 'lexical', 0, x.score));
+    chunks.filter((c) => graphPaths.has(String(c._id))).forEach((c, i) => add(c, i, 'graph', 0, 0, graphPaths.get(String(c._id))));
     return [...fused.values()].sort((a, b) => b.score - a.score).slice(0, topK).map((x) => ({
       chunkId: String(x.chunk._id), documentId: String(x.chunk.documentId), documentName: names.get(String(x.chunk.documentId)) || 'Unknown Document', content: x.chunk.content,
       pageNumber: x.chunk.pageNumber, chunkIndex: x.chunk.chunkIndex, similarityScore: Math.round(x.dense * 1000) / 1000,
+      lexicalScore: Math.round(x.lexical * 1000) / 1000,
       fusedScore: x.score, retrievalChannels: [...x.channels], graphPath: x.path,
     }));
   }
