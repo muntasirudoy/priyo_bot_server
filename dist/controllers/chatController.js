@@ -75,7 +75,7 @@ class ChatController {
                 .filter((m) => m.role === 'USER' || m.role === 'ASSISTANT' || m.role === 'AGENT')
                 .map((m) => ({ role: m.role, content: m.content }));
             // 6. & 7. Call Gemini text model & validate structured response
-            const aiResponse = await RagService_js_1.RagService.generateAnswer(trimmedMessage, retrievedChunks, recentContextHistory, intent, { userEmail: conversation.userEmail, conversationId: conversation._id });
+            const aiResponse = await RagService_js_1.RagService.generateAnswer(trimmedMessage, retrievedChunks, recentContextHistory, intent, { userEmail: conversation.userEmail, conversationId: conversation._id }, undefined, expandedQuery.standalone);
             // Handle human escalation
             if (aiResponse.needsHuman) {
                 console.log(`🚨 Escalating conversation ${conversation._id} to HUMAN_REQUIRED`);

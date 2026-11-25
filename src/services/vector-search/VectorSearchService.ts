@@ -25,7 +25,7 @@ export class VectorSearchService {
       .sort((a, b) => b.score - a.score).slice(0, RAG_CONFIG.DENSE_CANDIDATES);
     const stopwords = new Set(['a', 'an', 'the', 'is', 'are', 'was', 'who', 'what', 'where', 'when', 'how', 'i', 'you', 'your', 'my', 'of', 'for', 'in', 'on', 'to', 'ei', 'ki', 'k', 'ke', 'er', 'r', 'ta']);
     const salient = (text: string) => new Set([...this.tokens(text)].filter((token) => !stopwords.has(token)));
-    const queryTokenSets = [salient(query.original), salient(query.standalone)].filter((set) => set.size > 0);
+    const queryTokenSets = [query.original, query.standalone, ...query.variants].map(salient).filter((set) => set.size > 0);
     const lexical = chunks.map((c) => { const words = this.tokens(`${names.get(String(c.documentId)) || ''} ${c.sectionTitle || ''} ${c.content} ${(c.keywords || []).join(' ')}`); const score = Math.max(0, ...queryTokenSets.map((tokens) => [...tokens].filter((token) => words.has(token)).length / tokens.size)); return { c, score }; })
       .filter((x) => x.score > 0).sort((a, b) => b.score - a.score).slice(0, RAG_CONFIG.LEXICAL_CANDIDATES);
     const fused = new Map<string, { chunk: typeof chunks[number]; score: number; dense: number; lexical: number; channels: Set<string>; path?: string[] }>();

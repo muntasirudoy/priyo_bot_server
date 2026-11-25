@@ -12,20 +12,29 @@ class RagService {
         return Math.max(0, ...chunks.map((c) => Math.max(c.similarityScore, c.lexicalScore ?? 0, c.rerankerScore ?? 0)));
     }
     static groundedFallback(question, chunks, fallback) {
-        const top = [...chunks].sort((a, b) => Math.max(b.similarityScore, b.lexicalScore ?? 0, b.rerankerScore ?? 0) - Math.max(a.similarityScore, a.lexicalScore ?? 0, a.rerankerScore ?? 0))[0];
-        if (!top)
+        if (!chunks.length)
             return fallback;
-        const faq = /^Question:[^\n]*\nAnswer:\s*([\s\S]+)/i.exec(top.content);
+        const ordered = [...chunks].sort((a, b) => Math.max(b.similarityScore, b.lexicalScore ?? 0, b.rerankerScore ?? 0) - Math.max(a.similarityScore, a.lexicalScore ?? 0, a.rerankerScore ?? 0));
+        const faq = ordered.map((chunk) => /^Question:[^\n]*\nAnswer:\s*([\s\S]+)/i.exec(chunk.content)).find(Boolean);
         if (faq)
             return faq[1].trim().slice(0, 600);
         const tokens = new Set((question.toLowerCase().match(/[\p{L}\p{N}]{3,}/gu) || []).filter((word) => !['what', 'the', 'this', 'that', 'with', 'your', 'companyr', 'nam', 'please'].includes(word)));
-        const sentences = top.content.replace(/\s*\n\s*/g, ' ').split(/(?<=[.!?।])\s+/).map((sentence) => sentence.replace(/https?:\/\/\S+/g, '').trim()).filter((sentence) => sentence.length > 25 && sentence.length < 350 && /[\p{L}]/u.test(sentence));
-        const ranked = sentences.map((sentence) => ({ sentence, matches: [...tokens].filter((token) => sentence.toLowerCase().includes(token)).length })).sort((a, b) => b.matches - a.matches || b.sentence.length - a.sentence.length);
-        if (ranked[0]?.matches)
+        const employment = /\b(company|employer|workplace|work|working|job|kaj|chakri)\b/i.test(question);
+        const sentences = ordered.flatMap((chunk) => chunk.content.replace(/\s*\n\s*/g, ' ').split(/(?<=[.!?।])\s+/).map((sentence) => sentence.replace(/https?:\/\/\S+/g, '').trim()).filter((sentence) => sentence.length > 25 && sentence.length < 350 && /[\p{L}]/u.test(sentence)));
+        const ranked = sentences.map((sentence) => {
+            const matches = [...tokens].filter((token) => sentence.toLowerCase().includes(token)).length;
+            const employmentCue = employment && /\b(currently|present|works?\s+at|working\s+(?:at|for)|employed\s+(?:at|by)|company|employer)\b/i.test(sentence) ? 2 : 0;
+            return { sentence, score: matches + employmentCue };
+        }).sort((a, b) => b.score - a.score || b.sentence.length - a.sentence.length);
+        if (ranked[0]?.score)
             return ranked[0].sentence;
         return fallback;
     }
-    static clarify(question, fallback) {
+    static clarify(question, fallback, searchQuestion) {
+        if (searchQuestion && searchQuestion !== question && /current company employer workplace/i.test(searchQuestion)) {
+            const subject = searchQuestion.split(' ')[0];
+            return `${subject} currently kon company te kaj korchen, eta amar kache thaka information theke confirm korte parchi na.`;
+        }
         if (/companyr?\s+nam|kon\s+company/i.test(question))
             return 'Kon companyr kotha bolchen? Nam ba ektu context dile check kore bolte parbo.';
         if (/company\s+name/i.test(question))
@@ -36,7 +45,7 @@ class RagService {
             return 'আরেকটু বিস্তারিত বলবেন? তাহলে আমি সঠিক তথ্যটা খুঁজে দেখতে পারব।';
         return fallback;
     }
-    static async generateAnswer(userQuestion, chunks, history = [], intent = 'KNOWLEDGE_QUERY', identity, settings) {
+    static async generateAnswer(userQuestion, chunks, history = [], intent = 'KNOWLEDGE_QUERY', identity, settings, searchQuestion) {
         const config = settings ?? await (0, BotSettings_js_1.getBotSettings)();
         if (intent === 'HUMAN_NEEDED')
             return { answer: 'I hear you. I’ve asked our support team to take over this chat and follow up at your email.', confidence: 'high', needsHuman: true };
@@ -49,10 +58,10 @@ class RagService {
         if (score < config.confidenceThreshold) {
             if (identity)
                 await UnansweredQuery_js_1.UnansweredQuery.create({ query: userQuestion, userEmail: identity.userEmail, conversationId: identity.conversationId });
-            return { answer: this.clarify(userQuestion, config.fallbackMessage), confidence: 'low', needsHuman: false };
+            return { answer: this.clarify(userQuestion, config.fallbackMessage, searchQuestion), confidence: 'low', needsHuman: false };
         }
         if (!(0, gemini_js_1.isGeminiConfigured)())
-            return { answer: this.groundedFallback(userQuestion, chunks, config.fallbackMessage), confidence: 'medium', needsHuman: false };
+            return { answer: this.groundedFallback(searchQuestion || userQuestion, chunks, config.fallbackMessage), confidence: 'medium', needsHuman: false };
         try {
             const model = (0, gemini_js_1.getGeminiClient)().getGenerativeModel({ model: env_js_1.ENV.GEMINI_TEXT_MODEL, generationConfig: { temperature: 0.35, responseMimeType: 'application/json' } });
             const context = chunks.slice(0, 6).map((c) => c.content).join('\n\n');
@@ -68,7 +77,7 @@ Knowledge:\n${context}\nRecent chat:\n${history.slice(-5).map((m) => `${m.role}:
         catch (error) {
             console.warn('Answer generation failed:', error);
         }
-        return { answer: this.groundedFallback(userQuestion, chunks, config.fallbackMessage), confidence: 'medium', needsHuman: false };
+        return { answer: this.groundedFallback(searchQuestion || userQuestion, chunks, config.fallbackMessage), confidence: 'medium', needsHuman: false };
     }
 }
 exports.RagService = RagService;

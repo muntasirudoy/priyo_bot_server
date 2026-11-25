@@ -3,6 +3,7 @@ import { cosineSimilarity } from '../utils/math.js';
 import { ChunkingService } from '../services/documents/ChunkingService.js';
 import { EmbeddingService } from '../services/embedding/EmbeddingService.js';
 import { RagService } from '../services/ai/RagService.js';
+import { QueryUnderstandingService } from '../services/ai/QueryUnderstandingService.js';
 import jwt from 'jsonwebtoken';
 import { ENV } from '../config/env.js';
 import { MULTILINGUAL_TERM_GROUPS } from '../constants/index.js';
@@ -98,6 +99,8 @@ async function runAllTests() {
   assert(emptyContextResponse.answer.includes('tell me more'), 'Returns a natural clarifying response');
   const evidence = { chunkId: '1', documentId: '1', documentName: 'FAQ', content: 'Company name', pageNumber: 1, chunkIndex: 0, similarityScore: 0, lexicalScore: 0.8, rerankerScore: 0.9 };
   assert(RagService.retrievalConfidence([evidence]) === 0.9, 'Lexical and reranker evidence can pass the answer threshold');
+  const followUp = await QueryUnderstandingService.expand('kon company te kaj kore?', [{ role: 'USER', content: 'tosar k?' }, { role: 'ASSISTANT', content: 'Tosar Das Shuvo is a product manager.' }]);
+  assert(followUp.standalone.toLowerCase().includes('tosar') && followUp.variants.some((variant) => variant.toLowerCase().includes('tosar company')), 'Follow-up company query retains the person from chat history');
 
   // Test 7: JWT Auth
   console.log('\n--- 7. JWT Auth Tests ---');

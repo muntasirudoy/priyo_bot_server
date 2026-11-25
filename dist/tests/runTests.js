@@ -8,6 +8,7 @@ const math_js_1 = require("../utils/math.js");
 const ChunkingService_js_1 = require("../services/documents/ChunkingService.js");
 const EmbeddingService_js_1 = require("../services/embedding/EmbeddingService.js");
 const RagService_js_1 = require("../services/ai/RagService.js");
+const QueryUnderstandingService_js_1 = require("../services/ai/QueryUnderstandingService.js");
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const env_js_1 = require("../config/env.js");
 const index_js_1 = require("../constants/index.js");
@@ -91,6 +92,8 @@ async function runAllTests() {
     assert(emptyContextResponse.answer.includes('tell me more'), 'Returns a natural clarifying response');
     const evidence = { chunkId: '1', documentId: '1', documentName: 'FAQ', content: 'Company name', pageNumber: 1, chunkIndex: 0, similarityScore: 0, lexicalScore: 0.8, rerankerScore: 0.9 };
     assert(RagService_js_1.RagService.retrievalConfidence([evidence]) === 0.9, 'Lexical and reranker evidence can pass the answer threshold');
+    const followUp = await QueryUnderstandingService_js_1.QueryUnderstandingService.expand('kon company te kaj kore?', [{ role: 'USER', content: 'tosar k?' }, { role: 'ASSISTANT', content: 'Tosar Das Shuvo is a product manager.' }]);
+    assert(followUp.standalone.toLowerCase().includes('tosar') && followUp.variants.some((variant) => variant.toLowerCase().includes('tosar company')), 'Follow-up company query retains the person from chat history');
     // Test 7: JWT Auth
     console.log('\n--- 7. JWT Auth Tests ---');
     const payload = { adminId: '654321654321654321654321', email: 'admin@support.com' };

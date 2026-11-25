@@ -76,7 +76,7 @@ export class ChatController {
       const aiResponse = await RagService.generateAnswer(
         trimmedMessage,
         retrievedChunks,
-        recentContextHistory, intent, { userEmail: conversation.userEmail, conversationId: conversation._id }
+        recentContextHistory, intent, { userEmail: conversation.userEmail, conversationId: conversation._id }, undefined, expandedQuery.standalone
       );
 
       // Handle human escalation
